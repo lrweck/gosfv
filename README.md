@@ -65,6 +65,33 @@ BenchmarkAlgorithms/SHA256     2191 MB/s   0 allocs/op
 BenchmarkAlgorithms/MD5        1012 MB/s   0 allocs/op
 ```
 
+### Read/hash overlap
+
+Reading a block and then hashing it in the same goroutine leaves the disk
+idle while the hash runs. For MD5, SHA-1 and SHA-256 on files of 16 MiB or
+more, each worker has a reader goroutine and two ping-pong buffers: the
+reader has the next block ready while the worker hashes the current one.
+xxHash3 and CRC-32 keep their existing paths.
+
+`go test -bench BenchmarkPipeline ./internal/engine` with a cached 48 MiB file:
+
+| Algorithm | Serial | Overlapped |
+| --- | ---: | ---: |
+| MD5 | 855 MB/s | 1000 MB/s |
+| SHA-1 | 1668 MB/s | 2150 MB/s |
+| SHA-256 | 1544 MB/s | 1896 MB/s |
+
+Hashing stays on the worker goroutine, so the digest is byte-identical: an
+18 GiB SHA-256 pair matched the serial output byte for byte.
+
+### Many-file verification
+
+`runner.Verify` used to stat every checksum entry in one goroutine; on 20k
+files that was 60–70% of the wall time. Entries are now stat'ed by GOMAXPROCS
+workers (one on sequential media). A 20k-file verify on the development
+machine went from a 663 ms median to 498 ms, with the same status and size
+handling.
+
 CRC-32 on one 64 MiB file, cached, with the default worker count on a
 20-thread machine (`go test -bench BenchmarkCRC32 ./internal/engine`):
 
@@ -307,7 +334,7 @@ go test ./...
 $env:GOEXPERIMENT = "simd"; go test ./...
 ```
 
-The tests cover known hash vectors, hex round trips (including fuzz), both checksum syntaxes, legacy CRC endianness, parser allocation bounds, scanner behavior, filtering, CRC chunk combination, engine cancellation and progress, the runner, settings and theme compatibility, command-line parsing (single- and double-dash flags, `--`, invalid values), the details snapshot (single-file stat, multi-selection summary, cancellation and the size limit), and the view in both palettes with `ui.Tester`.
+The tests cover known hash vectors, hex round trips (including fuzz), both checksum syntaxes, legacy CRC endianness, parser allocation bounds, scanner behavior, filtering, CRC chunk combination, engine cancellation and progress, the runner, the read/hash overlap at buffer-boundary sizes, parallel checksum stats, settings and theme compatibility, command-line parsing (single- and double-dash flags, `--`, invalid values), the details snapshot (single-file stat, multi-selection summary, cancellation and the size limit), and the view in both palettes with `ui.Tester`.
 
 `TestRenderPreview` writes the light and dark renders used in this README without a display:
 
