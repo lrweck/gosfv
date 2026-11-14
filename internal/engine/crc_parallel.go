@@ -12,10 +12,13 @@ import (
 	"gosfv/internal/fio"
 )
 
-// crcMinChunk keeps the overhead of a chunk below the work it does. A 1 MiB
-// chunk costs about 37 microseconds at CRC-32's SIMD throughput, so even a
-// 20 MiB file can keep a 20-core machine busy.
-const crcMinChunk = 1 << 20
+// DefaultCRCChunkSize is the minimum size of a CRC-32 chunk. An 8 MiB
+// chunk is about 0.3 ms of CRC-32 work on this reference machine, which is
+// large enough that opening a handle and scheduling a goroutine do not
+// dominate, and small enough that a 20 MiB file still uses two workers.
+// A file that has fewer chunks than workers uses fewer workers, rather than
+// making the chunks smaller.
+const DefaultCRCChunkSize = 8 << 20
 
 type crcChunk struct {
 	task   int
@@ -43,9 +46,13 @@ func (e *Engine) runCRCParallel(ctx context.Context) bool {
 		return false
 	}
 
+	chunkSize := e.opt.CRCChunkSize
+	if chunkSize <= 0 {
+		chunkSize = DefaultCRCChunkSize
+	}
 	maxChunks := make([]int, n)
 	for i := range e.tasks {
-		maxChunks[i] = int(e.tasks[i].Size / crcMinChunk)
+		maxChunks[i] = int(e.tasks[i].Size / chunkSize)
 		if maxChunks[i] < 1 {
 			maxChunks[i] = 1
 		}

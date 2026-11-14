@@ -22,7 +22,7 @@ func benchCRCFile(b *testing.B, workers int) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		e := New([]Task{{Index: 0, Path: path, Size: int64(len(data))}}, Options{
-			Kind: hasher.CRC32, Workers: workers,
+			Kind: hasher.CRC32, Workers: workers, CRCChunkSize: 1 << 20,
 		})
 		e.Run(context.Background())
 		if err := e.Result(0).Err; err != nil {

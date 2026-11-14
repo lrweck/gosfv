@@ -131,6 +131,11 @@ type Options struct {
 	// long, at about 1 MiB intervals. Path is the task's path, so callers
 	// need not share mutable file state with workers.
 	OnFileProgress func(index int32, path string, done, total int64)
+	// CRCChunkSize is the minimum size of a CRC-32 chunk when one file is
+	// split across workers. Zero uses DefaultCRCChunkSize (16 MiB). If a
+	// file has fewer chunks than workers, it uses fewer workers instead of
+	// shrinking the chunks further.
+	CRCChunkSize int64
 }
 
 // Engine hashes tasks.

@@ -54,6 +54,29 @@ BenchmarkCRC32AllCores    7582 MB/s   20 chunk workers, 1 file
 The parallel CRC run does more than one core's work on one file and produces
 the same `.sfv` value; the limit is the read path, not the checksum.
 
+### CRC chunk size
+
+`DefaultCRCChunkSize` is 8 MiB. The engine also accepts
+`Options.CRCChunkSize` for tests and embedders. Chunks are never smaller than
+that, but the worker count caps them: a 512 MiB file with 20 workers gets 20
+chunks of 25.6 MiB, not 64 chunks.
+
+A 20 MiB file, cached, 20 logical cores (`BenchmarkCRCChunkSizes20MiB`):
+
+| Minimum chunk | Chunks / workers | Throughput |
+| --- | --- | --- |
+| 1 MiB | 20 / 20 | 3967 MB/s |
+| 2 MiB | 10 / 10 | 3900 MB/s |
+| 4 MiB | 5 / 5 | 4500 MB/s |
+| **8 MiB** | **2 / 2** | **5194 MB/s** |
+| 16 MiB | 1 / 1 | 3712 MB/s |
+
+On a 512 MiB file, 1–16 MiB minimums all produce the 20-chunk cap, so they
+measure within noise of each other (about 3.9–4.1 GB/s); letting the cap use
+fewer but larger chunks (32–64 MiB) reached 4.25–5.05 GB/s on the cached file,
+but that leaves cores idle on mid-size files. 8 MiB was the best compromise:
+two chunks for a 20 MiB file and full parallelism from roughly 160 MiB up.
+
 The end-to-end engine is I/O bound, so a real run is bounded by the disk, not the hash. On a cached 8 MiB file the xxHash3 path measures about 3.7 GB/s including open, read and result handling, with 11 allocations for the entire run.
 
 ### Go 1.27 SIMD
@@ -72,7 +95,7 @@ With `GOEXPERIMENT=simd` and AVX2, `simd/archsimd` converts 16 input bytes to 32
 ### Scheduling: one file per core, and one file on all cores when the algorithm allows it
 
 - The normal pool creates `runtime.GOMAXPROCS(0)` workers (unless HDD/network mode forces one). Each worker hashes **one file at a time**. With 100 files and 20 cores, 20 files are in flight; with 4 files and 20 cores, 4 files are in flight.
-- When there are **fewer files than cores** and the algorithm is **CRC-32**, GoSFV splits each file into chunks of at least 1 MiB and hashes the chunks on all workers. The block CRCs are combined with the same GF(2) matrix algorithm zlib uses (`crc32_combine`), so the resulting `.sfv` is exactly what a single-threaded tool would produce. One 20 GiB `.sfv` verification can use every core.
+- When there are **fewer files than cores** and the algorithm is **CRC-32**, GoSFV splits each file into chunks of at least 8 MiB and hashes the chunks on all workers. The block CRCs are combined with the same GF(2) matrix algorithm zlib uses (`crc32_combine`), so the resulting `.sfv` is exactly what a single-threaded tool would produce. A 20 GiB `.sfv` verification can use every core; a 20 MiB file uses two chunks rather than twenty.
 - MD5, SHA-1, SHA-256 and xxHash3 are **sequential digests**. There is no way to split one file's bytes among N cores and combine the pieces into the standard digest; doing so would produce a checksum no other tool recognizes. For those algorithms a single file uses one core, and extra cores are intentionally idle rather than producing an incompatible hash. Multiple files still use one core each.
 
 This is the honest limit of standard checksum formats. The GUI and CLI both follow it.

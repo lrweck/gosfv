@@ -21,7 +21,7 @@ func TestParallelCRCSingleFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	e := New([]Task{{Index: 0, Path: path, Size: int64(len(data))}}, Options{
-		Kind: hasher.CRC32, Workers: 4,
+		Kind: hasher.CRC32, Workers: 4, CRCChunkSize: 1 << 20,
 	})
 	e.Run(context.Background())
 	if !e.usedCRCParallel {
@@ -53,7 +53,7 @@ func TestParallelCRCManyFiles(t *testing.T) {
 		tasks = append(tasks, Task{Index: int32(i), Path: path, Size: int64(len(data))})
 		all = append(all, data)
 	}
-	e := New(tasks, Options{Kind: hasher.CRC32, Workers: 8})
+	e := New(tasks, Options{Kind: hasher.CRC32, Workers: 8, CRCChunkSize: 1 << 20})
 	e.Run(context.Background())
 	if !e.usedCRCParallel {
 		t.Fatal("two CRC files were not split across workers")
@@ -71,9 +71,43 @@ func TestParallelCRCManyFiles(t *testing.T) {
 	}
 }
 
+func TestCRCDefaultChunkPolicy(t *testing.T) {
+	dir := t.TempDir()
+	makeFile := func(name string, size int) string {
+		path := filepath.Join(dir, name)
+		f, err := os.Create(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := f.Truncate(int64(size)); err != nil {
+			_ = f.Close()
+			t.Fatal(err)
+		}
+		_ = f.Close()
+		return path
+	}
+	// 8 MiB is one chunk: one worker.
+	small := makeFile("small.bin", 8<<20)
+	e := New([]Task{{Index: 0, Path: small, Size: 8 << 20}}, Options{Kind: hasher.CRC32, Workers: 4})
+	e.Run(context.Background())
+	if e.usedCRCParallel {
+		t.Error("an 8 MiB file should not split with an 8 MiB minimum chunk")
+	}
+	// 20 MiB is two chunks: two workers.
+	large := makeFile("large.bin", 20<<20)
+	e = New([]Task{{Index: 0, Path: large, Size: 20 << 20}}, Options{Kind: hasher.CRC32, Workers: 4})
+	e.Run(context.Background())
+	if !e.usedCRCParallel {
+		t.Error("a 20 MiB file should split into two chunks")
+	}
+	if err := e.Result(0).Err; err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestParallelCRCFallsBack(t *testing.T) {
 	dir := t.TempDir()
-	data := make([]byte, 512<<10) // below crcMinChunk: one chunk per file
+	data := make([]byte, 512<<10) // below the default chunk: one chunk per file
 	path := filepath.Join(dir, "small.bin")
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Fatal(err)
