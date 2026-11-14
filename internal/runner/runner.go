@@ -13,7 +13,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/lrweck/gosfv/internal/checksum"
@@ -154,7 +157,7 @@ func Verify(ctx context.Context, checksumPath string, opt Options) (*Report, err
 		if filepath.IsAbs(name) {
 			dir, rel, full = "", name, name
 		}
-		f := model.File{
+		files[i] = model.File{
 			ID:       uint64(i + 1),
 			Name:     filepath.Base(name),
 			Rel:      rel,
@@ -163,18 +166,63 @@ func Verify(ctx context.Context, checksumPath string, opt Options) (*Report, err
 			Expected: e.Hash,
 			Status:   model.Queued,
 		}
-		info, statErr := os.Stat(full)
-		if statErr != nil {
-			f.Status = model.Missing
-		} else if info.IsDir() {
-			f.Status = model.Error
-		} else {
-			f.Size = info.Size()
-		}
-		files[i] = f
 	}
+	statFiles(ctx, files, statWorkers(opt))
 	slices.SortFunc(files, func(a, b model.File) int { return comparePath(a.Rel, b.Rel) })
 	return run(ctx, files, opt, start, true, checksumPath, parsed.Comments)
+}
+
+// statWorkers is how many goroutines look files up. Stat is a syscall per
+// entry, and on a checksum with tens of thousands of files it is the
+// dominant cost of verification; one worker stays for sequential disks.
+func statWorkers(opt Options) int {
+	if opt.Sequential {
+		return 1
+	}
+	n := opt.Workers
+	if n <= 0 {
+		n = runtime.GOMAXPROCS(0)
+	}
+	if n < 1 {
+		n = 1
+	}
+	return n
+}
+
+// statFiles fills Size and the pre-run status of every entry. Each worker
+// owns every index it takes from the counter, so the writes never race.
+func statFiles(ctx context.Context, files []model.File, workers int) {
+	if len(files) == 0 {
+		return
+	}
+	if workers > len(files) {
+		workers = len(files)
+	}
+	var next atomic.Int64
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	for w := 0; w < workers; w++ {
+		go func() {
+			defer wg.Done()
+			for {
+				i := int(next.Add(1)) - 1
+				if i >= len(files) || ctx.Err() != nil {
+					return
+				}
+				f := &files[i]
+				info, err := os.Stat(f.Full)
+				switch {
+				case err != nil:
+					f.Status = model.Missing
+				case info.IsDir():
+					f.Status = model.Error
+				default:
+					f.Size = info.Size()
+				}
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 func comparePath(a, b string) int {
@@ -265,8 +313,10 @@ func run(ctx context.Context, files []model.File, opt Options, start time.Time, 
 		applied   = make([]bool, len(tasks))
 		completed int
 		legacy    bool
-		batch     []Completed
-		counts    = Progress{Total: len(files), Missing: missing, Error: errorsPre}
+		// One tick can finish at most one file per worker, so this is the
+		// whole batch in the common case and never grows in the hot path.
+		batch  = make([]Completed, 0, eng.Workers()+1)
+		counts = Progress{Total: len(files), Missing: missing, Error: errorsPre}
 	)
 
 	tick := func() {

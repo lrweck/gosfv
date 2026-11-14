@@ -149,6 +149,29 @@ func TestCreateCRC32StandardByteOrder(t *testing.T) {
 	}
 }
 
+func TestStatFiles(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "a.bin"), []byte("1234"))
+	if err := os.Mkdir(filepath.Join(dir, "folder"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := []model.File{
+		{Full: filepath.Join(dir, "a.bin")},
+		{Full: filepath.Join(dir, "missing.bin")},
+		{Full: filepath.Join(dir, "folder")},
+	}
+	statFiles(context.Background(), files, 4)
+	if files[0].Size != 4 || files[0].Status != model.Queued {
+		t.Errorf("file = %+v", files[0])
+	}
+	if files[1].Status != model.Missing {
+		t.Errorf("missing = %+v", files[1])
+	}
+	if files[2].Status != model.Error {
+		t.Errorf("directory = %+v", files[2])
+	}
+}
+
 func TestVerifyLegacyCRC32Endian(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "a.bin")

@@ -8,8 +8,9 @@ import (
 	"github.com/lrweck/gosfv/internal/hasher"
 )
 
-// BenchmarkFixedFile reads the same large file in both I/O implementations.
-// Set GOSFV_BENCH_FILE to a file of at least a few hundred MiB.
+// BenchmarkFixedFile hashes one large file with the engine's default worker
+// count and buffer sizing, the path the app uses on an SSD. Set
+// GOSFV_BENCH_FILE to a file of at least a few hundred MiB.
 func BenchmarkFixedFile(b *testing.B) {
 	path := os.Getenv("GOSFV_BENCH_FILE")
 	if path == "" {
@@ -29,9 +30,7 @@ func BenchmarkFixedFile(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
 				e := New([]Task{{Index: 0, Path: path, Size: size}}, Options{
-					Kind:       kind,
-					Sequential: true,
-					BufferSize: 8 << 20,
+					Kind: kind,
 				})
 				e.Run(context.Background())
 				if err := e.Result(0).Err; err != nil {
