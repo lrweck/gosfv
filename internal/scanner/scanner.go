@@ -93,7 +93,7 @@ func Collect(ctx context.Context, inputs []string, base string, opt Options, onF
 				if path == root {
 					return nil
 				}
-				if opt.SkipHidden && strings.HasPrefix(d.Name(), ".") {
+				if opt.SkipHidden && isHidden(path, d) {
 					return fs.SkipDir
 				}
 				if !opt.Recursive {
@@ -101,7 +101,7 @@ func Collect(ctx context.Context, inputs []string, base string, opt Options, onF
 				}
 				return nil
 			}
-			if opt.SkipHidden && strings.HasPrefix(d.Name(), ".") {
+			if opt.SkipHidden && isHidden(path, d) {
 				return nil
 			}
 			entry, err := d.Info()

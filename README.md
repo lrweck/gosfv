@@ -120,7 +120,7 @@ This is the honest limit of standard checksum formats. The GUI and CLI both foll
 
 ### Scanning and I/O
 
-- Directories are walked with `filepath.WalkDir`. Filters use `filepath.Match`; relative paths use `filepath.Rel`; deduplication is a map of cleaned paths.
+- Directories are walked with `filepath.WalkDir`. Filters use `filepath.Match`; relative paths use `filepath.Rel`; deduplication is a map of cleaned paths. One small Win32 attribute check preserves SharpSFV's hidden/system skip on Windows; on other systems the dot-name rule is enough.
 - Files are opened with `os.Open` and read with `os.File.Read`. The parallel CRC path uses `os.File.ReadAt`, which is safe from several goroutines and maps to the platform's positional read.
 - The engine uses one sequential reader (8 MiB buffer) for a mechanical disk or network share, and one reader per `GOMAXPROCS` worker (about 1 MiB each) for flash.
 - Custom code is kept for what the standard library does not provide: the CRC-32 block combiner, rotational-drive detection, the Explorer registry entries, the checksum-format parser, and the SIMD/SWAR hex codec.
