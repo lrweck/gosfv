@@ -5,6 +5,7 @@ go 1.27.3
 require (
 	github.com/egoist/mygo v0.9.0
 	github.com/schollz/progressbar/v3 v3.19.1
+	github.com/spf13/pflag v1.1.0
 	github.com/zeebo/xxh3 v1.1.0
 	golang.org/x/sys v0.50.0
 )

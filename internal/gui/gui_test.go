@@ -39,6 +39,35 @@ func testApp() *App {
 	return a
 }
 
+func TestThemePalettes(t *testing.T) {
+	if lightPalette.Dark || !darkPalette.Dark {
+		t.Fatalf("palettes: light.Dark=%v dark.Dark=%v", lightPalette.Dark, darkPalette.Dark)
+	}
+	if lightPalette.Background == darkPalette.Background {
+		t.Error("both palettes share a background")
+	}
+	if got := themeMode("Dark"); got != settings.ThemeDark {
+		t.Errorf("themeMode(Dark) = %v", got)
+	}
+	if got := themeMode("Light"); got != settings.ThemeLight {
+		t.Errorf("themeMode(Light) = %v", got)
+	}
+	if got := themeMode("System"); got != settings.ThemeSystem {
+		t.Errorf("themeMode(System) = %v", got)
+	}
+}
+
+func TestViewRendersInBothAppearances(t *testing.T) {
+	for _, dark := range []bool{false, true} {
+		tt := ui.NewTesterWith(testApp().view, 1200, 720, ui.TesterOptions{Dark: dark})
+		for _, text := range []string{"Files", "Theme", "OK", "BAD", "MISSING", "Open..."} {
+			if !tt.HasText(text) {
+				t.Errorf("dark=%v: view does not show %q", dark, text)
+			}
+		}
+	}
+}
+
 func TestViewShowsFiles(t *testing.T) {
 	a := testApp()
 	tt := ui.NewTester(a.view, 1100, 700)

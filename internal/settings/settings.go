@@ -33,6 +33,39 @@ func (m PathMode) String() string {
 	return "Relative"
 }
 
+// ThemeMode is the window appearance.
+type ThemeMode uint8
+
+const (
+	// ThemeSystem follows the desktop's light or dark setting.
+	ThemeSystem ThemeMode = iota
+	ThemeLight
+	ThemeDark
+)
+
+func (m ThemeMode) String() string {
+	switch m {
+	case ThemeLight:
+		return "Light"
+	case ThemeDark:
+		return "Dark"
+	default:
+		return "System"
+	}
+}
+
+// ParseTheme reads a theme name, keeping the default for unknown values.
+func ParseTheme(s string) ThemeMode {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "light":
+		return ThemeLight
+	case "dark":
+		return ThemeDark
+	default:
+		return ThemeSystem
+	}
+}
+
 // Settings is the portable configuration.
 type Settings struct {
 	ShowTime        bool
@@ -51,6 +84,7 @@ type Settings struct {
 	ExcludePattern  string
 	Recursive       bool
 	Signature       string
+	Theme           ThemeMode
 	DefaultAlgo     hasher.Kind
 	ColumnOrder     []string
 	ColumnWidths    map[string]float32
@@ -67,6 +101,7 @@ func Defaults() Settings {
 		ProcMode:        drive.Auto,
 		Recursive:       true,
 		Signature:       "L33T",
+		Theme:           ThemeSystem,
 		DefaultAlgo:     hasher.XXH3,
 		ColumnWidths:    map[string]float32{},
 		WindowStateKey:  "main",
@@ -154,6 +189,16 @@ func (s *Settings) set(key, val string) {
 		if val != "" {
 			s.Signature = val
 		}
+	case "theme":
+		s.Theme = ParseTheme(val)
+	case "darkmode":
+		// Older builds stored the appearance as a boolean.
+		switch strings.ToLower(val) {
+		case "1", "true", "yes":
+			s.Theme = ThemeDark
+		case "0", "false", "no":
+			s.Theme = ThemeLight
+		}
 	case "defaultalgo":
 		if k, ok := hasher.Parse(val); ok {
 			s.DefaultAlgo = k
@@ -200,6 +245,7 @@ func (s Settings) Save(path string) error {
 	fmt.Fprintf(&b, "ExcludePattern=%s\n", s.ExcludePattern)
 	fmt.Fprintf(&b, "ScanRecursive=%s\n", bit(s.Recursive))
 	fmt.Fprintf(&b, "Signature=%s\n", s.Signature)
+	fmt.Fprintf(&b, "Theme=%s\n", s.Theme)
 	fmt.Fprintf(&b, "DefaultAlgo=%s\n", s.DefaultAlgo)
 	order := make([]string, len(s.ColumnOrder))
 	for i, name := range s.ColumnOrder {

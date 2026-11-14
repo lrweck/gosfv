@@ -40,6 +40,8 @@ type Config struct {
 	SettingsPath string
 	Algo         hasher.Kind
 	AlgoSet      bool
+	Theme        settings.ThemeMode
+	ThemeSet     bool
 }
 
 // App is the whole window state.
@@ -129,6 +131,9 @@ type App struct {
 	miProcSSD      *mygo.MenuItem
 	miPathRel      *mygo.MenuItem
 	miPathAbs      *mygo.MenuItem
+	miThemeSystem  *mygo.MenuItem
+	miThemeLight   *mygo.MenuItem
+	miThemeDark    *mygo.MenuItem
 	miBadMove      *mygo.MenuItem
 	miBadRename    *mygo.MenuItem
 	miBadScript    *mygo.MenuItem
@@ -153,6 +158,9 @@ func Run(cfg Config) error {
 		path = settings.DefaultPath()
 	}
 	st := settings.Load(path)
+	if cfg.ThemeSet {
+		st.Theme = cfg.Theme
+	}
 	a := &App{
 		settings:     st,
 		settingsPath: path,
@@ -168,6 +176,9 @@ func Run(cfg Config) error {
 	if cfg.CreateMode {
 		a.createMode = true
 	}
+	// The appearance must be chosen before the first frame: the window and
+	// every widget take their colors from it.
+	mygo.Theme.SetSource(themeSource(st.Theme))
 	if !mygo.App.RequestSingleInstanceLock() {
 		return nil
 	}
@@ -192,6 +203,7 @@ func (a *App) start(cfg Config) {
 			Content:         ui.View(a.createView),
 		})
 		a.win.SetIcon(iconPNG)
+		a.win.SetWindowButtonsTheme(themeSource(a.settings.Theme))
 		a.win.OnClose(func(*mygo.CloseEvent) {
 			a.closing.Store(true)
 			if a.cancel != nil {
@@ -218,6 +230,7 @@ func (a *App) start(cfg Config) {
 		Content:   ui.View(a.view),
 	})
 	a.win.SetIcon(iconPNG)
+	a.win.SetWindowButtonsTheme(themeSource(a.settings.Theme))
 	a.win.OnClose(func(*mygo.CloseEvent) {
 		a.closing.Store(true)
 		if a.cancel != nil {
@@ -1018,6 +1031,10 @@ func (a *App) setNotice(s string) {
 func (a *App) highlight() string {
 	if a.notice != "" {
 		return a.notice
+	}
+	if a.modeJobs {
+		_, _, active := jobCounts(a.jobs)
+		return fmt.Sprintf("%d jobs · %d active", len(a.jobs), active)
 	}
 	if a.scanning {
 		return fmt.Sprintf("Scanning... %d files", a.scanCount)

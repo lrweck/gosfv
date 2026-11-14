@@ -110,7 +110,25 @@ func (a *App) buildMenu() {
 			a.invalidate()
 		},
 	}
+	a.miThemeSystem = &mygo.MenuItem{
+		ID: "theme-system", Label: "Follow System", Type: mygo.MenuItemRadio, Checked: a.settings.Theme == settings.ThemeSystem,
+		Click: click(func() { a.setTheme(settings.ThemeSystem) }),
+	}
+	a.miThemeLight = &mygo.MenuItem{
+		ID: "theme-light", Label: "Light", Type: mygo.MenuItemRadio, Checked: a.settings.Theme == settings.ThemeLight,
+		Click: click(func() { a.setTheme(settings.ThemeLight) }),
+	}
+	a.miThemeDark = &mygo.MenuItem{
+		ID: "theme-dark", Label: "Dark", Type: mygo.MenuItemRadio, Checked: a.settings.Theme == settings.ThemeDark,
+		Click: click(func() { a.setTheme(settings.ThemeDark) }),
+	}
+	appearance := &mygo.MenuItem{Label: "Appearance", Submenu: []*mygo.MenuItem{
+		a.miThemeSystem, a.miThemeLight, a.miThemeDark,
+	}}
+
 	view := &mygo.MenuItem{Label: "View", Submenu: []*mygo.MenuItem{
+		appearance,
+		mygo.Separator(),
 		a.miShowHash,
 		a.miShowExpected,
 		a.miShowTime,
@@ -304,6 +322,24 @@ func (a *App) setPathMode(m settings.PathMode) {
 	}
 }
 
+func (a *App) setTheme(m settings.ThemeMode) {
+	a.settings.Theme = m
+	mygo.Theme.SetSource(themeSource(m))
+	if a.win != nil && !a.win.IsDestroyed() {
+		a.win.SetWindowButtonsTheme(themeSource(m))
+	}
+	for item, mode := range map[*mygo.MenuItem]settings.ThemeMode{
+		a.miThemeSystem: settings.ThemeSystem,
+		a.miThemeLight:  settings.ThemeLight,
+		a.miThemeDark:   settings.ThemeDark,
+	} {
+		if item != nil {
+			item.SetChecked(mode == m)
+		}
+	}
+	a.invalidate()
+}
+
 func (a *App) resetColumns() {
 	a.settings.ColumnOrder = nil
 	a.settings.ColumnWidths = map[string]float32{}
@@ -337,6 +373,9 @@ func (a *App) syncViewMenu() {
 	set(a.miAdvanced, a.settings.ShowAdvanced)
 	set(a.miModeStandard, !a.modeJobs)
 	set(a.miModeJob, a.modeJobs)
+	set(a.miThemeSystem, a.settings.Theme == settings.ThemeSystem)
+	set(a.miThemeLight, a.settings.Theme == settings.ThemeLight)
+	set(a.miThemeDark, a.settings.Theme == settings.ThemeDark)
 	enabled := !a.processing && !a.jobRunning
 	if a.miModeStandard != nil {
 		a.miModeStandard.SetEnabled(enabled)

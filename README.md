@@ -2,7 +2,9 @@
 
 **GoSFV** is a Go port of [SharpSFV](https://github.com/Wishwanderer/SharpSFV), the modern spiritual successor to QuickSFV. It creates and verifies checksum files, keeps the familiar color-coded list, and adds a native desktop UI written in Go with [MyGo](https://github.com/egoist/mygo) 0.9.0 — no web view, no JavaScript, no C# runtime.
 
-![GoSFV verifying a checksum file](docs/screenshot.png)
+| Light | Dark |
+| --- | --- |
+| ![GoSFV verifying a checksum file in the light theme](docs/screenshot.png) | ![GoSFV verifying a checksum file in the dark theme](docs/screenshot-dark.png) |
 
 ## Features
 
@@ -10,6 +12,7 @@
 - **Checksum files:** `.sfv`, `.md5`, `.sha1`, `.sha256` and `.xxh3`.
 - **Both legacy syntaxes:** `HASH *filename` and CRC-32's `filename HASH`.
 - **Legacy SFV byte order:** CRC-32 written with the opposite endianness is recognized and reported, not marked BAD.
+- **System, light or dark:** the window follows the desktop by default; **View > Appearance** and the Theme selector in the header switch it at once, and the choice is saved in `GoSFV.ini`.
 - **Three UI modes:** the standard file list, a job queue that processes folder drops sequentially, and the compact "create checksum" window used by Explorer.
 - **Headless mode:** scriptable create and verify with progress and exit codes.
 - **Live progress:** throughput, ETA, per-file progress for files over 50 MiB, pause/resume and stop.
@@ -174,10 +177,11 @@ hash algorithms still use their assembly/SIMD implementations.
 
 ### GUI
 
-- Drop files or folders to create checksums.
-- Drop a single checksum file to verify it.
+- Drop files or folders to create checksums, or drop a single checksum file to verify it.
+- The header keeps search, the **Files / Jobs** switch and the primary actions; the counts below it are color-coded chips.
 - Switch to **Mode > Job Queue Mode** and drop folders; each folder becomes a job whose checksum file is written beside it.
 - Select rows for copy, rename, delete, or moving bad files.
+- Pick **View > Appearance** (or the Theme selector) to follow the system, or force light or dark.
 - Use **Options > System Integration** to add or remove Explorer entries.
 
 ### Command line
@@ -189,7 +193,8 @@ GoSFV.exe -headless -create -algo sha256 -o digests.sha256 C:\Builds
 GoSFV.exe -create -o checksums.sfv C:\Backups\2026
 ```
 
-Options:
+Options (the parser is [`spf13/pflag`](https://github.com/spf13/pflag), so
+`-headless` and `--headless` are the same flag):
 
 | Option | Meaning |
 | --- | --- |
@@ -199,8 +204,9 @@ Options:
 | `-algo NAME` | `xxh3`, `crc32`, `md5`, `sha1` or `sha256`. |
 | `-o PATH` | Output checksum file. |
 | `-ini PATH` | Configuration file. |
+| `-theme NAME` | Start the window in `system` (default), `light` or `dark`. |
 | `-version` | Print the version. |
-| `-h`, `--help` | Usage. |
+| `-h`, `--help` | Usage, generated from the flag definitions. |
 
 Exit codes: `0` when every file is OK, `1` when anything is BAD, MISSING or ERROR (or the run was stopped), `2` for usage or setup errors.
 
@@ -247,17 +253,18 @@ IncludePattern=
 ExcludePattern=
 ScanRecursive=1
 Signature=L33T
+Theme=System
 DefaultAlgo=XXHASH3
 ColumnOrder=Name:0,Hash:1,Status:2
 ColumnWidths=Name:300,Hash:430,Status:90
 ```
 
-`ProcessingMode` accepts `Auto`, `HDD` (one reader) and `SSD` (parallel). `PathStorageMode` accepts `Relative` and `Absolute`. The legacy `UseAbsolutePaths` and `OptimizeForHDD` keys are still read.
+`ProcessingMode` accepts `Auto`, `HDD` (one reader) and `SSD` (parallel). `PathStorageMode` accepts `Relative` and `Absolute`. `Theme` accepts `System`, `Light` and `Dark`; the legacy `DarkMode=0/1` key is still read. The legacy `UseAbsolutePaths` and `OptimizeForHDD` keys are also still read.
 
 ## How it is organized
 
 ```text
-main.go                 flags, GUI/headless dispatch
+main.go                 GUI/headless dispatch
 internal/
   hasher/               algorithm names, hashers, benchmarks
   hexfmt/               SIMD (Go 1.27) and portable hex codecs
@@ -270,8 +277,8 @@ internal/
   drive/                HDD/SSD detection
   badtools/             move/rename and .bat generators
   shell/                Explorer registry integration
-  cli/                  headless mode
-  gui/                  MyGo state, view, menus, actions and job queue
+  cli/                  flags (pflag), headless runner, terminal progress and report
+  gui/                  MyGo state, modern shell, palettes, menus, actions and job queue
 ```
 
 The flow is:
@@ -295,7 +302,13 @@ go test ./...
 $env:GOEXPERIMENT = "simd"; go test ./...
 ```
 
-The tests cover known hash vectors, hex round trips (including fuzz), both checksum syntaxes, legacy CRC endianness, parser allocation bounds, scanner behavior, filtering, CRC chunk combination, engine cancellation and progress, the runner, settings compatibility and the view itself with `ui.Tester`.
+The tests cover known hash vectors, hex round trips (including fuzz), both checksum syntaxes, legacy CRC endianness, parser allocation bounds, scanner behavior, filtering, CRC chunk combination, engine cancellation and progress, the runner, settings and theme compatibility, command-line parsing (single- and double-dash flags, `--`, invalid values), and the view in both palettes with `ui.Tester`.
+
+`TestRenderPreview` writes the light and dark renders used in this README without a display:
+
+```powershell
+$env:GOSFV_PREVIEW_DIR = "$env:TEMP"; go test ./internal/gui -run TestRenderPreview
+```
 
 ## Differences from SharpSFV
 

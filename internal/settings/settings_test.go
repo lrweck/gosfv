@@ -28,6 +28,7 @@ func TestRoundTrip(t *testing.T) {
 	s.ExcludePattern = "*.nfo"
 	s.Recursive = false
 	s.Signature = "TEST"
+	s.Theme = ThemeDark
 	s.DefaultAlgo = hasher.SHA256
 	s.ColumnOrder = []string{"Status", "Name", "Hash"}
 	s.ColumnWidths = map[string]float32{"Name": 321.5, "Hash": 200}
@@ -43,7 +44,7 @@ func TestRoundTrip(t *testing.T) {
 		got.Comments != s.Comments || got.PathPrefix != s.PathPrefix ||
 		got.IncludePattern != s.IncludePattern || got.ExcludePattern != s.ExcludePattern ||
 		got.Recursive != s.Recursive || got.Signature != s.Signature ||
-		got.DefaultAlgo != s.DefaultAlgo {
+		got.Theme != s.Theme || got.DefaultAlgo != s.DefaultAlgo {
 		t.Fatalf("settings differ:\n got %+v\nwant %+v", got, s)
 	}
 	if len(got.ColumnOrder) != 3 || got.ColumnOrder[0] != "Status" {
@@ -63,6 +64,35 @@ func TestLegacyKeys(t *testing.T) {
 	s := Load(path)
 	if s.PathMode != Absolute || s.ProcMode != drive.HDD || s.DefaultAlgo != hasher.CRC32 || s.Recursive {
 		t.Errorf("legacy parse = %+v", s)
+	}
+}
+
+func TestThemeKeys(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "GoSFV.ini")
+	if err := osWriteFile(path, "Theme=dark\n"); err != nil {
+		t.Fatal(err)
+	}
+	if got := Load(path).Theme; got != ThemeDark {
+		t.Errorf("Theme=dark -> %v", got)
+	}
+	if err := osWriteFile(path, "Theme=Light\n"); err != nil {
+		t.Fatal(err)
+	}
+	if got := Load(path).Theme; got != ThemeLight {
+		t.Errorf("Theme=Light -> %v", got)
+	}
+	// SharpSFV had no theme key; a boolean dark mode is still understood.
+	if err := osWriteFile(path, "DarkMode=1\n"); err != nil {
+		t.Fatal(err)
+	}
+	if got := Load(path).Theme; got != ThemeDark {
+		t.Errorf("DarkMode=1 -> %v", got)
+	}
+	if err := osWriteFile(path, "Theme=sepia\n"); err != nil {
+		t.Fatal(err)
+	}
+	if got := Load(path).Theme; got != ThemeSystem {
+		t.Errorf("unknown theme -> %v, want system", got)
 	}
 }
 

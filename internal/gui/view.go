@@ -9,11 +9,13 @@ import (
 	"gosfv/internal/hasher"
 	"gosfv/internal/hexfmt"
 	"gosfv/internal/model"
+	"gosfv/internal/settings"
 )
 
 var (
 	algorithmOptions = []string{"xxHash-3", "CRC-32", "MD5", "SHA-1", "SHA-256"}
 	statusOptions    = []string{"All", "Waiting", "Pending", "OK", "BAD", "MISSING"}
+	themeOptions     = []string{"System", "Light", "Dark"}
 )
 
 func (a *App) view(c *ui.Context) {
@@ -40,6 +42,7 @@ func (a *App) view(c *ui.Context) {
 		a.applyView()
 	}
 
+	applyPalette(c)
 	t := c.Theme()
 	root := ui.Column(c).Fill()
 	if root.FileDragOver() {
@@ -49,7 +52,8 @@ func (a *App) view(c *ui.Context) {
 		a.handlePaths(files)
 	}
 	root.Children(func() {
-		a.toolbar(c)
+		a.header(c)
+		a.statusBar(c)
 		if !a.modeJobs && a.settings.ShowFilter {
 			a.filterBar(c)
 		}
@@ -59,7 +63,6 @@ func (a *App) view(c *ui.Context) {
 		if a.verifying && len(a.comments) > 0 {
 			a.commentsBar(c)
 		}
-		a.statsBar(c)
 		if a.modeJobs {
 			a.jobTable(c)
 		} else {
@@ -68,32 +71,91 @@ func (a *App) view(c *ui.Context) {
 		if !a.modeJobs && len(a.activeView) > 0 {
 			a.activePanel(c)
 		}
-		a.progressBar(c)
+		a.footer(c)
 	})
 	if a.renameOpen {
 		a.renameModal(c)
 	}
 }
 
-func (a *App) toolbar(c *ui.Context) {
-	ui.Toolbar(c, func() {
-		if ui.Button(c, "Open...").Tooltip("Open a checksum file or files").Disabled(a.modeJobs).Clicked() {
-			a.deferAction(a.openDialog)
-		}
-		if ui.Button(c, "Save As...").Tooltip("Write the current list as a checksum file").Disabled(a.processing || a.modeJobs || len(a.store) == 0 || a.createMode).Clicked() {
-			a.deferAction(a.saveAs)
-		}
-		copyDisabled := a.selection.Len() == 0
+// header is the application bar: identity and context on the left, search,
+// mode and the three actions that act on the whole list on the right.
+func (a *App) header(c *ui.Context) {
+	t := c.Theme()
+	ui.Column(c).Background(t.Surface).Children(func() {
+		ui.Row(c).Padding(10, 16).Gap(12).AlignItems(ui.Center).Children(func() {
+			ui.Row(c).Width(30).Height(30).Center().Radius(8).Background(t.Accent).Shrink(0).Children(func() {
+				ui.Text(c, "G").FontSize(15).Bold().TextColor(t.AccentText)
+			})
+			ui.Column(c).Grow(1).Gap(2).Children(func() {
+				ui.Text(c, a.sectionTitle()).FontSize(15).Bold().SingleLine()
+				ui.Text(c, a.highlight()).FontSize(12).TextColor(t.TextMuted).SingleLine()
+			})
+			if !a.modeJobs && len(a.store) > 0 {
+				if ui.SearchField(c, &a.filterText).Width(280).Placeholder("Search files").Changed() {
+					a.filterAt = time.Now().Add(150 * time.Millisecond)
+					c.After(150 * time.Millisecond)
+				}
+			}
+			mode := 0
+			if a.modeJobs {
+				mode = 1
+			}
+			if ui.Segmented(c, &mode, "Files", "Jobs").Label("Mode").Changed() {
+				a.deferAction(func() { a.setMode(mode == 1) })
+			}
+			if ui.PrimaryButton(c, "Open...").Tooltip("Open a checksum file or files").Disabled(a.modeJobs).Clicked() {
+				a.deferAction(a.openDialog)
+			}
+			if ui.Button(c, "Save As...").Tooltip("Write the current list as a checksum file").Disabled(a.processing || a.modeJobs || len(a.store) == 0 || a.createMode).Clicked() {
+				a.deferAction(a.saveAs)
+			}
+			copyDisabled := a.selection.Len() == 0
+			if a.modeJobs {
+				copyDisabled = a.jobSel.Len() == 0
+			}
+			if ui.Button(c, "Copy").Tooltip("Copy the selected entries").Disabled(copyDisabled).Clicked() {
+				a.copyEntries()
+			}
+		})
+		ui.Divider(c)
+	})
+}
+
+// statusBar gathers the counts that used to be a second toolbar row into
+// compact chips, with the two controls that change the whole list beside
+// them.
+func (a *App) statusBar(c *ui.Context) {
+	t := c.Theme()
+	ui.Row(c).Padding(6, 16).Gap(8).AlignItems(ui.Center).Children(func() {
 		if a.modeJobs {
-			copyDisabled = a.jobSel.Len() == 0
+			done, errs, active := jobCounts(a.jobs)
+			a.statChip(c, "DONE", done, t.Success)
+			a.statChip(c, "ERROR", errs, t.Danger)
+			a.statChip(c, "ACTIVE", active, t.Accent)
+		} else {
+			a.statChip(c, "OK", a.stats.OK, t.Success)
+			a.statChip(c, "BAD", a.stats.Bad, t.Danger)
+			a.statChip(c, "MISSING", a.stats.Missing, t.Warning)
+			if a.stats.Error > 0 {
+				a.statChip(c, "ERROR", a.stats.Error, t.Danger)
+			}
 		}
-		if ui.Button(c, "Copy").Tooltip("Copy the selected entries").Disabled(copyDisabled).Clicked() {
-			a.copyEntries()
+		if a.settings.ShowThroughput && a.processing {
+			if speed := a.speedText(); speed != "" {
+				ui.Text(c, speed).FontSize(11).TextColor(t.TextMuted).SingleLine()
+			}
+		}
+		if a.settings.ShowTime && a.elapsed > 0 {
+			ui.Textf(c, "Elapsed %d ms", a.elapsed.Milliseconds()).FontSize(11).TextColor(t.TextMuted)
+		}
+		if a.legacy {
+			ui.Text(c, "Legacy SFV byte order").FontSize(11).Bold().TextColor(t.Warning)
 		}
 		ui.Spacer(c)
-		ui.Text(c, "Algorithm:").FontSize(12).TextColor(c.Theme().TextMuted)
+		ui.Text(c, "Hash").FontSize(11).TextColor(t.TextMuted)
 		choice := a.algo.ShortLabel()
-		sel := ui.Select(c, &choice, algorithmOptions).Width(128).Disabled(a.processing || a.verifying || a.modeJobs)
+		sel := ui.Select(c, &choice, algorithmOptions).Width(120).Disabled(a.processing || a.verifying || a.modeJobs)
 		if sel.Changed() {
 			for i, label := range algorithmOptions {
 				if label == choice {
@@ -102,34 +164,51 @@ func (a *App) toolbar(c *ui.Context) {
 				}
 			}
 		}
-		if a.processing {
-			label := "Pause"
-			if a.paused {
-				label = "Resume"
-			}
-			if ui.Button(c, label).Width(86).Clicked() {
-				a.togglePause()
-			}
-			if ui.Button(c, "Stop").Width(70).Clicked() {
-				a.stopRun()
-			}
-		}
-		if a.modeJobs {
-			if ui.Button(c, "Clear Done").Width(96).Disabled(a.processing || !a.hasCompletedJobs()).Clicked() {
-				a.clearCompletedJobs()
-			}
+		ui.Text(c, "Theme").FontSize(11).TextColor(t.TextMuted)
+		themeChoice := a.settings.Theme.String()
+		if ui.Select(c, &themeChoice, themeOptions).Width(96).Changed() {
+			a.setTheme(themeMode(themeChoice))
 		}
 	})
 }
 
+func (a *App) statChip(c *ui.Context, label string, n int, color ui.Color) {
+	t := c.Theme()
+	ui.Row(c).AlignItems(ui.Center).Gap(5).Padding(2, 8).Radius(999).Shrink(0).
+		Background(color.Alpha(0.13)).Children(func() {
+		ui.Text(c, label).FontSize(10).Bold().TextColor(color).SingleLine()
+		ui.Textf(c, "%d", n).FontSize(12).Bold().TextColor(t.Text)
+	})
+}
+
+func themeMode(label string) settings.ThemeMode {
+	switch label {
+	case "Light":
+		return settings.ThemeLight
+	case "Dark":
+		return settings.ThemeDark
+	default:
+		return settings.ThemeSystem
+	}
+}
+
+func (a *App) sectionTitle() string {
+	if a.modeJobs {
+		return "Job Queue"
+	}
+	if a.verifying {
+		return "Verifying"
+	}
+	if a.processing {
+		return "Creating"
+	}
+	return "Files"
+}
+
 func (a *App) filterBar(c *ui.Context) {
 	t := c.Theme()
-	ui.Row(c).Padding(6, 10).Gap(8).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, "Search:").FontSize(12).TextColor(t.TextMuted)
-		if ui.SearchField(c, &a.filterText).Width(260).Changed() {
-			a.filterAt = time.Now().Add(150 * time.Millisecond)
-			c.After(150 * time.Millisecond)
-		}
+	ui.Row(c).Padding(4, 16).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, "Status").FontSize(11).TextColor(t.TextMuted)
 		choice := statusOptions[a.statusFilter]
 		if ui.Select(c, &choice, statusOptions).Width(116).Changed() {
 			for i, s := range statusOptions {
@@ -143,7 +222,7 @@ func (a *App) filterBar(c *ui.Context) {
 			a.invalidate()
 		}
 		before := a.showDuplicates
-		ui.Checkbox(c, &a.showDuplicates, "Show Duplicates")
+		ui.Checkbox(c, &a.showDuplicates, "Duplicates only")
 		if a.showDuplicates != before {
 			a.applyView()
 			a.updateProblemMenus()
@@ -151,99 +230,73 @@ func (a *App) filterBar(c *ui.Context) {
 		}
 		ui.Spacer(c)
 		if len(a.viewRows) != len(a.store) {
-			ui.Textf(c, "Showing %d of %d", len(a.viewRows), len(a.store)).FontSize(12).TextColor(t.TextMuted)
+			ui.Textf(c, "Showing %d of %d", len(a.viewRows), len(a.store)).FontSize(11).TextColor(t.TextMuted)
 		}
 	})
 }
 
 func (a *App) advancedBar(c *ui.Context) {
-	ui.Row(c).Padding(6, 10).Gap(8).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, "Prefix:").FontSize(12).TextColor(c.Theme().TextMuted)
+	ui.Row(c).Padding(4, 16).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, "Prefix").FontSize(11).TextColor(c.Theme().TextMuted)
 		ui.TextInput(c, &a.settings.PathPrefix).Placeholder("incoming/iso").Width(150)
-		ui.Text(c, "Include:").FontSize(12).TextColor(c.Theme().TextMuted)
+		ui.Text(c, "Include").FontSize(11).TextColor(c.Theme().TextMuted)
 		ui.TextInput(c, &a.settings.IncludePattern).Placeholder("*.iso;*.mkv").Width(140)
-		ui.Text(c, "Exclude:").FontSize(12).TextColor(c.Theme().TextMuted)
+		ui.Text(c, "Exclude").FontSize(11).TextColor(c.Theme().TextMuted)
 		ui.TextInput(c, &a.settings.ExcludePattern).Placeholder("*.nfo").Width(120)
 		ui.Checkbox(c, &a.settings.Recursive, "Subfolders")
-		ui.Checkbox(c, &a.settings.Comments, "Save Comments")
+		ui.Checkbox(c, &a.settings.Comments, "Save comments")
 	})
 }
 
 func (a *App) commentsBar(c *ui.Context) {
 	text := strings.Join(a.comments, "   •   ")
-	ui.Row(c).Padding(4, 10).Children(func() {
-		ui.Text(c, "// "+text).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine().Grow(1).Tooltip(strings.Join(a.comments, "\n"))
-	})
-}
-
-func (a *App) statsBar(c *ui.Context) {
-	t := c.Theme()
-	ui.Row(c).Padding(4, 10).Gap(16).AlignItems(ui.Center).Children(func() {
-		label := a.highlight()
-		ui.Text(c, label).Bold().SingleLine().Grow(1)
-		if a.settings.ShowThroughput && a.processing {
-			if speed := a.speedText(); speed != "" {
-				ui.Text(c, speed).FontSize(12).TextColor(t.TextMuted)
-			}
-		}
-		if a.modeJobs {
-			done, errs, active := jobCounts(a.jobs)
-			ui.Textf(c, "DONE: %d", done).TextColor(t.Success).Bold()
-			ui.Textf(c, "ERROR: %d", errs).TextColor(t.Danger).Bold()
-			ui.Textf(c, "ACTIVE: %d", active).TextColor(t.Text).Bold()
-		} else {
-			ui.Textf(c, "OK: %d", a.stats.OK).TextColor(t.Success).Bold()
-			ui.Textf(c, "BAD: %d", a.stats.Bad).TextColor(t.Danger).Bold()
-			ui.Textf(c, "MISSING: %d", a.stats.Missing).TextColor(t.Warning).Bold()
-			if a.stats.Error > 0 {
-				ui.Textf(c, "ERROR: %d", a.stats.Error).TextColor(t.Danger).Bold()
-			}
-		}
-		if a.settings.ShowTime && a.elapsed > 0 {
-			ui.Textf(c, "Elapsed: %d ms", a.elapsed.Milliseconds()).TextColor(t.TextMuted).FontSize(12)
-		}
-		if a.legacy {
-			ui.Text(c, "Legacy SFV (byte order)").TextColor(t.Warning).FontSize(12).Bold()
-		}
+	ui.Row(c).Padding(2, 16).Children(func() {
+		ui.Text(c, "// "+text).FontSize(11).TextColor(c.Theme().TextMuted).SingleLine().Grow(1).Tooltip(strings.Join(a.comments, "\n"))
 	})
 }
 
 func (a *App) fileTable(c *ui.Context) {
+	t := c.Theme()
+	card := ui.Column(c).Fill().Margin(10, 16, 0, 16).Radius(10).Border(1, t.Border).Clip()
 	if len(a.store) == 0 {
-		t := c.Theme()
-		hint := ui.Column(c).Fill().Center().Gap(8).Padding(24)
-		if hint.FileDragOver() {
-			hint.Border(2, t.Accent)
-		}
-		hint.Children(func() {
-			ui.Text(c, "Drop files or folders here").FontSize(20).Bold()
-			ui.Text(c, "or drop a checksum file (.sfv, .md5, .sha1, .sha256, .xxh3) to verify it").TextColor(t.TextMuted)
-			ui.Textf(c, "Algorithm: %s", a.algo.Label()).TextColor(t.TextMuted).FontSize(12)
+		card.Background(t.Surface).Children(func() {
+			ui.Column(c).Fill().Center().Gap(10).Padding(32).Children(func() {
+				ui.Text(c, "Drop files or folders").FontSize(22).Bold()
+				ui.Text(c, "or drop a checksum file (.sfv, .md5, .sha1, .sha256, .xxh3) to verify it").TextColor(t.TextMuted)
+				ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+					if ui.PrimaryButton(c, "Open...").Clicked() {
+						a.deferAction(a.openDialog)
+					}
+					ui.Textf(c, "Algorithm: %s", a.algo.Label()).TextColor(t.TextMuted).FontSize(11)
+				})
+			})
 		})
-		if files := hint.DroppedFiles(); files != nil {
+		if files := card.DroppedFiles(); files != nil {
 			a.handlePaths(files)
 		}
 		return
 	}
-	tbl := ui.Table(c, &a.list, a.cols, len(a.viewRows), func(row, col int) {
-		a.fileCell(c, row, col)
-	}).Grow(1)
-	if tbl.Changed() {
-		if a.sort != a.appliedSort {
-			a.sortDirty = true
-		}
-		if !a.settings.LockColumns {
-			a.settings.ColumnOrder = append([]string(nil), a.list.Columns.Order...)
-			a.settings.ColumnWidths = make(map[string]float32, len(a.list.Columns.Widths))
-			for k, v := range a.list.Columns.Widths {
-				a.settings.ColumnWidths[k] = v
+	card.Children(func() {
+		tbl := ui.Table(c, &a.list, a.cols, len(a.viewRows), func(row, col int) {
+			a.fileCell(c, row, col)
+		}).Grow(1)
+		if tbl.Changed() {
+			if a.sort != a.appliedSort {
+				a.sortDirty = true
 			}
+			if !a.settings.LockColumns {
+				a.settings.ColumnOrder = append([]string(nil), a.list.Columns.Order...)
+				a.settings.ColumnWidths = make(map[string]float32, len(a.list.Columns.Widths))
+				for k, v := range a.list.Columns.Widths {
+					a.settings.ColumnWidths[k] = v
+				}
+			}
+			c.Invalidate()
 		}
-		c.Invalidate()
-	}
-	if tbl.Submitted() {
-		a.deferAction(func() { a.openSelectedFolder() })
-	}
+		if tbl.Submitted() {
+			a.deferAction(func() { a.openSelectedFolder() })
+		}
+	})
 }
 
 func (a *App) fileCell(c *ui.Context, row, col int) {
@@ -286,8 +339,36 @@ func (a *App) fileCell(c *ui.Context, row, col int) {
 	}
 }
 
-func (a *App) progressBar(c *ui.Context) {
+// footer holds the only full-width progress: the file list, the job queue
+// and the active panel above it all feed the same fraction.
+func (a *App) footer(c *ui.Context) {
 	t := c.Theme()
+	frac := a.currentFraction()
+	failed := a.stats.Bad > 0 || a.stats.Missing > 0 || a.stats.Error > 0
+	if a.modeJobs {
+		_, errs, _ := jobCounts(a.jobs)
+		failed = errs > 0
+	}
+	ui.Row(c).Padding(8, 16).Gap(12).AlignItems(ui.Center).Children(func() {
+		p := ui.Progress(c, frac).Height(6).Grow(1)
+		switch {
+		case a.paused:
+			p.TextColor(t.Warning)
+		case failed:
+			p.TextColor(t.Danger)
+		default:
+			p.TextColor(t.Success)
+		}
+		ui.Textf(c, "%d%%", int(frac*100)).FontSize(11).TextColor(t.TextMuted).Width(36)
+		if a.processing && a.settings.ShowThroughput {
+			if speed := a.speedText(); speed != "" {
+				ui.Text(c, speed).FontSize(11).TextColor(t.TextMuted).SingleLine()
+			}
+		}
+	})
+}
+
+func (a *App) currentFraction() float64 {
 	frac := 0.0
 	if a.modeJobs {
 		for i := range a.jobs {
@@ -302,24 +383,16 @@ func (a *App) progressBar(c *ui.Context) {
 				frac = last.Progress / 100
 			}
 		}
-	} else if a.stats.Total > 0 {
-		frac = float64(a.stats.Done) / float64(a.stats.Total)
+	} else {
+		frac = a.progressFraction()
 	}
 	if frac < 0 {
-		frac = 0
+		return 0
 	}
 	if frac > 1 {
-		frac = 1
+		return 1
 	}
-	p := ui.Progress(c, frac).Height(6).Margin(10, 10, 12, 6).Label("Progress")
-	switch {
-	case a.paused:
-		p.TextColor(t.Warning)
-	case a.stats.Bad > 0 || a.stats.Missing > 0 || a.stats.Error > 0:
-		p.TextColor(t.Danger)
-	default:
-		p.TextColor(t.Success)
-	}
+	return frac
 }
 
 func (a *App) activePanel(c *ui.Context) {
@@ -328,37 +401,42 @@ func (a *App) activePanel(c *ui.Context) {
 	if limit > 5 {
 		limit = 5
 	}
-	ui.Column(c).Padding(4, 10).Gap(3).Children(func() {
-		ui.Textf(c, "Active Jobs (%d)", len(a.activeView)).FontSize(12).Bold().TextColor(t.TextMuted)
+	ui.Column(c).Padding(4, 16).Gap(3).Children(func() {
+		ui.Textf(c, "Active files (%d)", len(a.activeView)).FontSize(11).Bold().TextColor(t.TextMuted)
 		for _, f := range a.activeView[:limit] {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, f.Name).FontSize(12).SingleLine().Grow(1)
+				ui.Text(c, f.Name).FontSize(11).SingleLine().Grow(1)
 				pct := float64(0)
 				if f.Total > 0 {
 					pct = float64(f.Done) / float64(f.Total)
 				}
 				ui.Progress(c, pct).Width(150)
-				ui.Textf(c, "%3d%%", int(pct*100)).FontSize(12).Width(48)
+				ui.Textf(c, "%3d%%", int(pct*100)).FontSize(11).Width(48)
 			})
 		}
 		if len(a.activeView) > limit {
-			ui.Textf(c, "... and %d more", len(a.activeView)-limit).FontSize(12).TextColor(t.TextMuted)
+			ui.Textf(c, "... and %d more", len(a.activeView)-limit).FontSize(11).TextColor(t.TextMuted)
 		}
 	})
 }
 
 func (a *App) jobTable(c *ui.Context) {
+	t := c.Theme()
+	card := ui.Column(c).Fill().Margin(10, 16, 0, 16).Radius(10).Border(1, t.Border).Clip()
 	if len(a.jobs) == 0 {
-		t := c.Theme()
-		ui.Column(c).Fill().Center().Gap(8).Children(func() {
-			ui.Text(c, "Drop folders to queue jobs").FontSize(20).Bold()
-			ui.Text(c, "Each job scans one folder and writes its checksum file beside it.").TextColor(t.TextMuted)
+		card.Background(t.Surface).Children(func() {
+			ui.Column(c).Fill().Center().Gap(10).Padding(32).Children(func() {
+				ui.Text(c, "Drop folders to queue jobs").FontSize(22).Bold()
+				ui.Text(c, "Each job scans one folder and writes its checksum file beside it.").TextColor(t.TextMuted)
+			})
 		})
 		return
 	}
-	ui.Table(c, &a.jobList, a.jobCols, len(a.jobs), func(row, col int) {
-		a.jobCell(c, row, col)
-	}).Grow(1)
+	card.Children(func() {
+		ui.Table(c, &a.jobList, a.jobCols, len(a.jobs), func(row, col int) {
+			a.jobCell(c, row, col)
+		}).Grow(1)
+	})
 }
 
 func (a *App) jobCell(c *ui.Context, row, col int) {
@@ -438,6 +516,7 @@ func (a *App) createView(c *ui.Context) {
 	if a.sortDirty {
 		a.sortDirty = false
 	}
+	applyPalette(c)
 	t := c.Theme()
 	ui.Column(c).Fill().Padding(16).Gap(8).Children(func() {
 		ui.Text(c, "Creating checksums").FontSize(16).Bold()
