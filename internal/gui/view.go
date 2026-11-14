@@ -42,17 +42,15 @@ func (a *App) view(c *ui.Context) {
 		a.applyView()
 	}
 
-	// The details job is started here, while the previous frame's selection
-	// is known, and never does its work on this thread. A hidden sidebar
-	// does not start or keep one.
-	if a.settings.ShowDetails && !a.modeJobs {
-		a.refreshSelection(a.selDirty)
-	} else if a.sel.Count != 0 || a.sel.Loading {
-		a.cancelSelection()
-		a.sel = selectionInfo{}
-		a.selSig = selectionSig{}
+	// A hidden sidebar does not start or keep a details job.
+	if !a.settings.ShowDetails || a.modeJobs {
+		if a.sel.Count != 0 || a.sel.Loading {
+			a.cancelSelection()
+			a.sel = selectionInfo{}
+			a.selSig = selectionSig{}
+		}
+		a.selDirty = false
 	}
-	a.selDirty = false
 
 	applyPalette(c)
 	t := c.Theme()
@@ -66,11 +64,10 @@ func (a *App) view(c *ui.Context) {
 	root.Children(func() {
 		a.header(c)
 		a.statusBar(c)
-		ui.Row(c).Fill().AlignItems(ui.Stretch).Children(func() {
-			if a.settings.ShowDetails && !a.modeJobs {
-				a.detailsPanel(c)
-			}
-			ui.Column(c).Fill().Grow(1).Children(func() {
+		// The table comes first in the build so the sidebar sees the row
+		// this frame's click chose; Reverse keeps the sidebar on the left.
+		ui.Row(c).Fill().AlignItems(ui.Stretch).Reverse().Children(func() {
+			ui.Column(c).Fill().Grow(1).MinWidth(0).Children(func() {
 				if !a.modeJobs && a.settings.ShowFilter {
 					a.filterBar(c)
 				}
@@ -89,6 +86,9 @@ func (a *App) view(c *ui.Context) {
 					a.activePanel(c)
 				}
 			})
+			if a.settings.ShowDetails && !a.modeJobs {
+				a.detailsPanel(c)
+			}
 		})
 		a.footer(c)
 	})

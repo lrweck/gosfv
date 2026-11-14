@@ -80,6 +80,20 @@ func TestViewShowsDetailsSidebar(t *testing.T) {
 	}
 }
 
+func TestDetailsSidebarFollowsClick(t *testing.T) {
+	a := testApp()
+	tt := ui.NewTester(a.view, 1200, 720)
+	if err := tt.Click("b.bin"); err != nil {
+		t.Fatal(err)
+	}
+	if a.sel.Count != 1 || !a.sel.HasSingle || a.sel.Single.Name != "b.bin" {
+		t.Fatalf("selection after click = %+v", a.sel)
+	}
+	if tt.HasText("Click a file to inspect it.") {
+		t.Error("sidebar still shows the empty state after a click")
+	}
+}
+
 func TestViewShowsFiles(t *testing.T) {
 	a := testApp()
 	tt := ui.NewTester(a.view, 1100, 700)

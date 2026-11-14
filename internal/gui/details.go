@@ -13,6 +13,10 @@ import (
 // system, so opening a file, selecting a thousand or resizing the window
 // all stay on the main thread for a bounded, tiny amount of work.
 func (a *App) detailsPanel(c *ui.Context) {
+	// Built after the table, so a click this frame is already in the
+	// selection; there is no frame that shows the previous choice.
+	a.refreshSelection(a.selDirty)
+	a.selDirty = false
 	t := c.Theme()
 	side := ui.Column(c).Width(300).Shrink(0).Background(t.Surface)
 	side.Children(func() {
@@ -40,13 +44,27 @@ func (a *App) detailsPanel(c *ui.Context) {
 	})
 }
 
+// emptyDetails deliberately has the same blocks and row count as
+// singleDetails: selecting the first file fills values in instead of
+// replacing a short message with a taller panel.
 func (a *App) emptyDetails(c *ui.Context) {
 	t := c.Theme()
-	ui.Text(c, "Nothing selected").FontSize(15).Bold()
-	ui.Text(c, "Click a file to see its size, date, hashes and timing.").FontSize(11).TextColor(t.TextMuted)
+	ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
+		ui.Row(c).Padding(2, 8).Radius(999).Background(t.SurfacePressed).Shrink(0).Children(func() {
+			ui.Text(c, "—").FontSize(10).Bold().TextColor(t.TextMuted).SingleLine()
+		})
+		ui.Text(c, "No selection").FontSize(10).TextColor(t.TextMuted)
+	})
+	ui.Text(c, "No file selected").FontSize(15).Bold().SingleLine()
+	ui.Text(c, "Click a file to inspect it.").FontSize(10).TextColor(t.TextMuted).SingleLine()
 	ui.Divider(c)
-	a.detailField(c, "Files", strconv.Itoa(len(a.store)))
-	a.detailField(c, "Algorithm", a.algo.Label())
+	a.detailField(c, "Size", "—")
+	a.detailField(c, "Modified", "—")
+	a.detailField(c, "Elapsed", "—")
+	a.detailField(c, "Folder", "—")
+	ui.Divider(c)
+	a.hashField(c, "Hash", "—")
+	a.hashField(c, "Expected", "—")
 }
 
 func (a *App) singleDetails(c *ui.Context, d *fileDetail) {
@@ -63,7 +81,7 @@ func (a *App) singleDetails(c *ui.Context, d *fileDetail) {
 		}
 	})
 	ui.Text(c, d.Name).FontSize(15).Bold().SingleLine().Tooltip(d.Name)
-	ui.Text(c, d.Path).FontSize(10).TextColor(t.TextMuted).Tooltip(d.Path)
+	ui.Text(c, d.Path).FontSize(10).TextColor(t.TextMuted).SingleLine().Tooltip(d.Path)
 	ui.Divider(c)
 	a.detailField(c, "Size", formatBytes(d.Size))
 	if d.StatOK {
@@ -73,6 +91,11 @@ func (a *App) singleDetails(c *ui.Context, d *fileDetail) {
 		ui.Text(c, d.StatErr).FontSize(10).TextColor(t.Warning)
 	}
 	a.detailField(c, "Elapsed", formatDuration(d.Elapsed))
+	folder := d.Dir
+	if folder == "" {
+		folder = "—"
+	}
+	a.detailField(c, "Folder", folder)
 	if d.Hash != "" {
 		ui.Divider(c)
 		a.hashField(c, "Hash", d.Hash)
@@ -84,8 +107,31 @@ func (a *App) singleDetails(c *ui.Context, d *fileDetail) {
 
 func (a *App) multiDetails(c *ui.Context, info *selectionInfo) {
 	t := c.Theme()
-	ui.Textf(c, "%d files", info.Count).FontSize(22).Bold()
-	ui.Text(c, formatBytes(info.TotalSize)).FontSize(13).TextColor(t.TextMuted)
+	ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
+		ui.Row(c).Padding(2, 8).Radius(999).Background(t.Accent.Alpha(0.13)).Shrink(0).Children(func() {
+			ui.Text(c, "MULTI").FontSize(10).Bold().TextColor(t.Accent).SingleLine()
+		})
+		if info.Found < info.Count {
+			ui.Textf(c, "%d of %d present", info.Found, info.Count).FontSize(10).TextColor(t.Warning).SingleLine()
+		}
+	})
+	ui.Textf(c, "%d files", info.Count).FontSize(15).Bold().SingleLine()
+	ui.Text(c, formatBytes(info.TotalSize)).FontSize(10).TextColor(t.TextMuted).SingleLine()
+	ui.Divider(c)
+	a.detailField(c, "Size", formatBytes(info.TotalSize))
+	a.detailField(c, "Folders", strconv.Itoa(info.Folders))
+	a.detailField(c, "Elapsed", formatDuration(info.TotalElapsed))
+	if info.LargestName != "" {
+		a.detailField(c, "Largest", info.LargestName+" · "+formatBytes(info.LargestSize))
+	} else {
+		a.detailField(c, "Largest", "—")
+	}
+	if info.SmallestName != "" && info.SmallestSize != info.LargestSize {
+		a.detailField(c, "Smallest", info.SmallestName+" · "+formatBytes(info.SmallestSize))
+	} else {
+		a.detailField(c, "Smallest", "—")
+	}
+	ui.Divider(c)
 	ui.Row(c).Gap(6).Wrap().Children(func() {
 		if info.OK > 0 {
 			a.statChip(c, "OK", info.OK, t.Success)
@@ -103,18 +149,6 @@ func (a *App) multiDetails(c *ui.Context, info *selectionInfo) {
 			a.statChip(c, "WAITING", info.Waiting, t.TextMuted)
 		}
 	})
-	ui.Divider(c)
-	if info.Found < info.Count {
-		a.detailField(c, "Present", fmt.Sprintf("%d of %d", info.Found, info.Count))
-	}
-	a.detailField(c, "Folders", strconv.Itoa(info.Folders))
-	a.detailField(c, "Elapsed", formatDuration(info.TotalElapsed))
-	if info.LargestName != "" {
-		a.detailField(c, "Largest", info.LargestName+" · "+formatBytes(info.LargestSize))
-	}
-	if info.SmallestName != "" && info.SmallestSize != info.LargestSize {
-		a.detailField(c, "Smallest", info.SmallestName+" · "+formatBytes(info.SmallestSize))
-	}
 }
 
 // detailField is one label and one value. The value is clipped to the
@@ -133,7 +167,11 @@ func (a *App) hashField(c *ui.Context, label, value string) {
 	t := c.Theme()
 	ui.Column(c).Gap(2).Children(func() {
 		ui.Text(c, label).FontSize(10).TextColor(t.TextMuted).SingleLine()
-		ui.Text(c, value).FontSize(10).Tooltip(value)
+		// Two lines fit a SHA-256 at this width; keeping the height fixed
+		// means switching files never grows or shrinks the panel.
+		ui.Column(c).Height(30).Children(func() {
+			ui.Text(c, value).FontSize(10).Tooltip(value)
+		})
 	})
 }
 
