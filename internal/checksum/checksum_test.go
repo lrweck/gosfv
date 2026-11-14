@@ -111,6 +111,32 @@ func TestWriteRoundTrip(t *testing.T) {
 	}
 }
 
+// TestWriteCRC32StandardByteOrder pins the SFV convention: the eight
+// hexadecimal characters are the numeric CRC-32 value written most
+// significant nibble first. The byte-reversed form is a .NET hashing
+// implementation detail used by old SharpSFV builds, not the SFV format.
+func TestWriteCRC32StandardByteOrder(t *testing.T) {
+	dir := t.TempDir()
+	var b bytes.Buffer
+	files := []model.File{{
+		Name:   "123456789.bin",
+		Rel:    "123456789.bin",
+		Dir:    dir,
+		Status: model.OK,
+		Hash:   []byte{0xCB, 0xF4, 0x39, 0x26}, // CRC-32 of "123456789"
+	}}
+	if _, err := WriteTo(&b, hasher.CRC32, files, WriteOptions{Relative: true, SaveDir: dir}); err != nil {
+		t.Fatal(err)
+	}
+	const want = "CBF43926 *123456789.bin\r\n"
+	if got := b.String(); got != want {
+		t.Errorf("WriteTo = %q, want %q", got, want)
+	}
+	if bytes.Contains(b.Bytes(), []byte("2639F4CB")) {
+		t.Error("wrote the legacy little-endian byte order")
+	}
+}
+
 func TestWriteOnlyOK(t *testing.T) {
 	var b bytes.Buffer
 	files := []model.File{

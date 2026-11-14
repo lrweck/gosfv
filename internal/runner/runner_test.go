@@ -12,6 +12,7 @@ import (
 
 	"gosfv/internal/checksum"
 	"gosfv/internal/hasher"
+	"gosfv/internal/hexfmt"
 	"gosfv/internal/model"
 )
 
@@ -122,6 +123,29 @@ func TestVerifyAndBadMissing(t *testing.T) {
 	}
 	if c.done[0] != model.OK || c.done[1] != model.Bad {
 		t.Errorf("statuses = %v", c.done)
+	}
+}
+
+// TestCreateCRC32StandardByteOrder checks that a created CRC-32 digest is
+// stored MSB-first, so the .sfv text matches what cksfv, QuickSFV and the
+// SFV format define. Only the parser/verifier accepts the legacy reversal.
+func TestCreateCRC32StandardByteOrder(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "a.bin"), []byte("123456789"))
+
+	c := newCapture()
+	rep, err := Create(context.Background(), []string{dir}, dir, c.opts(hasher.CRC32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Progress.OK != 1 || len(c.files) != 1 {
+		t.Fatalf("progress = %+v files = %d", rep.Progress, len(c.files))
+	}
+	if got := hexfmt.Upper(c.hashes[0]); got != "CBF43926" {
+		t.Errorf("hash = %s, want CBF43926", got)
+	}
+	if !bytes.Equal(c.hashes[0], crc32sum([]byte("123456789"))) {
+		t.Error("created digest differs from the standard library CRC-32")
 	}
 }
 

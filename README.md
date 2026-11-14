@@ -18,6 +18,24 @@
 - **Portable settings:** `GoSFV.ini` beside the executable, compatible with SharpSFV's key names.
 - **Explorer integration:** right-click files or folders to create a checksum; checksum extensions open in GoSFV when they are not already associated with another application. Everything is registered under `HKCU`, so no elevation is needed.
 
+## Checksum format
+
+An `.sfv` line is `FILENAME<whitespace>CHECKSUM`, and the checksum is the
+numeric CRC-32 as eight hexadecimal digits, most significant digit first. That
+is the order cksfv, QuickSFV and 7-Zip write, and what other tools expect, so
+GoSFV always writes it:
+
+```text
+CBF43926 *file.bin     CRC-32 of "123456789"
+```
+
+Reading also accepts the byte-reversed spelling (`2639F4CB *file.bin`). Old
+SharpSFV builds printed the raw bytes of .NET's `System.IO.Hashing.Crc32`,
+which are little-endian, and files created that way still exist. The verifier
+recognises them and reports the legacy order instead of marking the file BAD.
+New files are never written reversed: the standard order is the only form every
+tool agrees on.
+
 ## Performance
 
 GoSFV is designed for throughput on the same disk as the .NET original, and the hot paths use SIMD and SWAR in every layer.
