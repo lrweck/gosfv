@@ -115,6 +115,33 @@ func TestMatch(t *testing.T) {
 	}
 }
 
+func BenchmarkCollectTree(b *testing.B) {
+	root := os.Getenv("GOSFV_BENCH_TREE")
+	if root == "" {
+		b.Skip("set GOSFV_BENCH_TREE to a large directory tree")
+	}
+	for _, sortFiles := range []bool{false, true} {
+		name := "nosort"
+		if sortFiles {
+			name = "sort"
+		}
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				files, err := Collect(context.Background(), []string{root}, root, Options{
+					Recursive: true, SkipHidden: true, Sort: sortFiles,
+				}, nil)
+				if err != nil {
+					b.Fatal(err)
+				}
+				if len(files) == 0 {
+					b.Fatal("no files")
+				}
+			}
+		})
+	}
+}
+
 func TestFilter(t *testing.T) {
 	f := NewFilter("*.iso; *.mkv", "sample*,*.nfo")
 	for _, n := range []string{"movie.iso", "Movie.MKV"} {
