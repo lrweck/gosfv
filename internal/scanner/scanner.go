@@ -7,7 +7,6 @@ package scanner
 
 import (
 	"context"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -81,34 +80,8 @@ func Collect(ctx context.Context, inputs []string, base string, opt Options, onF
 			add(abs, info.Size())
 			continue
 		}
-		root := abs
-		err = filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
-			if walkErr != nil {
-				return nil // unreadable entry: skip it and its subtree
-			}
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			if d.IsDir() {
-				if path == root {
-					return nil
-				}
-				if opt.SkipHidden && isHidden(path, d) {
-					return fs.SkipDir
-				}
-				if !opt.Recursive {
-					return fs.SkipDir
-				}
-				return nil
-			}
-			if opt.SkipHidden && isHidden(path, d) {
-				return nil
-			}
-			entry, err := d.Info()
-			if err != nil || !entry.Mode().IsRegular() {
-				return nil
-			}
-			add(path, entry.Size())
+		err = walkFiles(ctx, abs, opt.Recursive, opt.SkipHidden, func(path string, size int64) error {
+			add(path, size)
 			return nil
 		})
 		if err != nil {
