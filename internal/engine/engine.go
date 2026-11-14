@@ -136,6 +136,27 @@ type Options struct {
 	// file has fewer chunks than workers, it uses fewer workers instead of
 	// shrinking the chunks further.
 	CRCChunkSize int64
+	// Pipeline overlaps reading a large file with hashing its previous
+	// block, for the sequential digests (MD5, SHA-1, SHA-256). Each such
+	// worker holds a second buffer. Read-only digests (xxHash3) and the
+	// chunked CRC-32 path do not use it.
+	Pipeline bool
+}
+
+// pipelineMinSize is the smallest file worth a second buffer. Below it the
+// extra goroutine and buffer cost more than the overlap saves.
+var pipelineMinSize int64 = 16 << 20
+
+// pipelined reports whether this task takes the read/hash overlap path.
+func (e *Engine) pipelined(t *Task) bool {
+	if !e.opt.Pipeline || t.Size < pipelineMinSize {
+		return false
+	}
+	switch e.opt.Kind {
+	case hasher.MD5, hasher.SHA1, hasher.SHA256:
+		return true
+	}
+	return false
 }
 
 // Engine hashes tasks.
@@ -286,6 +307,9 @@ func (e *Engine) worker(ctx context.Context) {
 }
 
 func (e *Engine) hashOne(ctx context.Context, h hash.Hash, t *Task, buf []byte, pos int) (int64, error) {
+	if e.pipelined(t) {
+		return e.hashPipelined(ctx, h, t, buf, pos)
+	}
 	f, err := os.Open(t.Path)
 	if err != nil {
 		return 0, err

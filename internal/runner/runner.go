@@ -307,6 +307,9 @@ func run(ctx context.Context, files []model.File, opt Options, start time.Time, 
 		Workers:        opt.Workers,
 		Gate:           opt.Gate,
 		OnFileProgress: opt.OnFileProgress,
+		// Overlap read and hash for the sequential digests; the engine
+		// ignores this for xxHash3, CRC-32 and small files.
+		Pipeline: true,
 	})
 
 	var (
