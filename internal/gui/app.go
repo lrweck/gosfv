@@ -853,19 +853,13 @@ func (a *App) pathPrefix() string {
 func (a *App) updateProblemMenus() {
 	has := !a.processing && !a.modeJobs && a.stats.Bad+a.stats.Error > 0
 	for _, item := range []*mygo.MenuItem{a.miBadMove, a.miBadRename, a.miBadScript} {
-		if item != nil {
-			item.SetEnabled(has)
-		}
+		setMenuItemEnabled(item, has)
 	}
 	dups := !a.processing && !a.modeJobs && a.showDuplicates && len(a.viewRows) > 0
 	for _, item := range []*mygo.MenuItem{a.miDupCopy, a.miDupDelete} {
-		if item != nil {
-			item.SetEnabled(dups)
-		}
+		setMenuItemEnabled(item, dups)
 	}
-	if a.miClearJobs != nil {
-		a.miClearJobs.SetEnabled(!a.processing && a.hasCompletedJobs())
-	}
+	setMenuItemEnabled(a.miClearJobs, !a.processing && a.hasCompletedJobs())
 }
 
 func (a *App) hasCompletedJobs() bool {

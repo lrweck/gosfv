@@ -13,6 +13,22 @@ import (
 	"gosfv/internal/shell"
 )
 
+// setMenuItemEnabled and setMenuItemChecked skip updates that change
+// nothing. Every real update redraws the native menu bar, and the progress
+// tick asks for these states several times a second; without the guard an
+// unchanged menu bar repaints continuously and visibly flickers.
+func setMenuItemEnabled(item *mygo.MenuItem, on bool) {
+	if item != nil && item.IsEnabled() != on {
+		item.SetEnabled(on)
+	}
+}
+
+func setMenuItemChecked(item *mygo.MenuItem, on bool) {
+	if item != nil && item.IsChecked() != on {
+		item.SetChecked(on)
+	}
+}
+
 func (a *App) buildMenu() {
 	click := func(fn func()) func(*mygo.MenuItem, *mygo.Window) {
 		return func(*mygo.MenuItem, *mygo.Window) { fn() }
@@ -242,12 +258,8 @@ func (a *App) setMode(jobs bool) {
 		return
 	}
 	a.modeJobs = jobs
-	if a.miModeStandard != nil {
-		a.miModeStandard.SetChecked(!jobs)
-	}
-	if a.miModeJob != nil {
-		a.miModeJob.SetChecked(jobs)
-	}
+	setMenuItemChecked(a.miModeStandard, !jobs)
+	setMenuItemChecked(a.miModeJob, jobs)
 	if jobs {
 		a.resetJobList()
 	} else {
@@ -291,35 +303,24 @@ func (a *App) setAlgorithm(k hasher.Kind) {
 }
 
 func (a *App) syncAlgoMenu() {
+	enabled := !a.processing && !(a.verifying && len(a.store) > 0)
 	for k, item := range a.miAlgos {
-		if item != nil {
-			item.SetChecked(k == a.algo)
-			item.SetEnabled(!a.processing && !(a.verifying && len(a.store) > 0))
-		}
+		setMenuItemChecked(item, k == a.algo)
+		setMenuItemEnabled(item, enabled)
 	}
 }
 
 func (a *App) setProcMode(m drive.Mode) {
 	a.settings.ProcMode = m
-	if a.miProcAuto != nil {
-		a.miProcAuto.SetChecked(m == drive.Auto)
-	}
-	if a.miProcHDD != nil {
-		a.miProcHDD.SetChecked(m == drive.HDD)
-	}
-	if a.miProcSSD != nil {
-		a.miProcSSD.SetChecked(m == drive.SSD)
-	}
+	setMenuItemChecked(a.miProcAuto, m == drive.Auto)
+	setMenuItemChecked(a.miProcHDD, m == drive.HDD)
+	setMenuItemChecked(a.miProcSSD, m == drive.SSD)
 }
 
 func (a *App) setPathMode(m settings.PathMode) {
 	a.settings.PathMode = m
-	if a.miPathRel != nil {
-		a.miPathRel.SetChecked(m == settings.Relative)
-	}
-	if a.miPathAbs != nil {
-		a.miPathAbs.SetChecked(m == settings.Absolute)
-	}
+	setMenuItemChecked(a.miPathRel, m == settings.Relative)
+	setMenuItemChecked(a.miPathAbs, m == settings.Absolute)
 }
 
 func (a *App) setTheme(m settings.ThemeMode) {
@@ -333,9 +334,7 @@ func (a *App) setTheme(m settings.ThemeMode) {
 		a.miThemeLight:  settings.ThemeLight,
 		a.miThemeDark:   settings.ThemeDark,
 	} {
-		if item != nil {
-			item.SetChecked(mode == m)
-		}
+		setMenuItemChecked(item, mode == m)
 	}
 	a.invalidate()
 }
@@ -349,38 +348,25 @@ func (a *App) resetColumns() {
 
 func (a *App) syncShellMenu() {
 	registered := shell.Registered()
-	if a.miShell != nil {
-		a.miShell.SetEnabled(!registered)
-	}
-	if a.miUnshell != nil {
-		a.miUnshell.SetEnabled(registered)
-	}
+	setMenuItemEnabled(a.miShell, !registered)
+	setMenuItemEnabled(a.miUnshell, registered)
 }
 
 func (a *App) syncViewMenu() {
-	set := func(item *mygo.MenuItem, on bool) {
-		if item != nil {
-			item.SetChecked(on)
-		}
-	}
-	set(a.miShowHash, a.settings.ShowHashCol)
-	set(a.miShowExpected, a.settings.ShowExpectedCol)
-	set(a.miShowTime, a.settings.ShowTime)
-	set(a.miThroughput, a.settings.ShowThroughput)
-	set(a.miFullPaths, a.settings.ShowFullPaths)
-	set(a.miLockColumns, a.settings.LockColumns)
-	set(a.miFilter, a.settings.ShowFilter)
-	set(a.miAdvanced, a.settings.ShowAdvanced)
-	set(a.miModeStandard, !a.modeJobs)
-	set(a.miModeJob, a.modeJobs)
-	set(a.miThemeSystem, a.settings.Theme == settings.ThemeSystem)
-	set(a.miThemeLight, a.settings.Theme == settings.ThemeLight)
-	set(a.miThemeDark, a.settings.Theme == settings.ThemeDark)
+	setMenuItemChecked(a.miShowHash, a.settings.ShowHashCol)
+	setMenuItemChecked(a.miShowExpected, a.settings.ShowExpectedCol)
+	setMenuItemChecked(a.miShowTime, a.settings.ShowTime)
+	setMenuItemChecked(a.miThroughput, a.settings.ShowThroughput)
+	setMenuItemChecked(a.miFullPaths, a.settings.ShowFullPaths)
+	setMenuItemChecked(a.miLockColumns, a.settings.LockColumns)
+	setMenuItemChecked(a.miFilter, a.settings.ShowFilter)
+	setMenuItemChecked(a.miAdvanced, a.settings.ShowAdvanced)
+	setMenuItemChecked(a.miModeStandard, !a.modeJobs)
+	setMenuItemChecked(a.miModeJob, a.modeJobs)
+	setMenuItemChecked(a.miThemeSystem, a.settings.Theme == settings.ThemeSystem)
+	setMenuItemChecked(a.miThemeLight, a.settings.Theme == settings.ThemeLight)
+	setMenuItemChecked(a.miThemeDark, a.settings.Theme == settings.ThemeDark)
 	enabled := !a.processing && !a.jobRunning
-	if a.miModeStandard != nil {
-		a.miModeStandard.SetEnabled(enabled)
-	}
-	if a.miModeJob != nil {
-		a.miModeJob.SetEnabled(enabled)
-	}
+	setMenuItemEnabled(a.miModeStandard, enabled)
+	setMenuItemEnabled(a.miModeJob, enabled)
 }
