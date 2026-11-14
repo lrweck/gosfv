@@ -126,6 +126,13 @@ func (a *App) buildMenu() {
 			a.invalidate()
 		},
 	}
+	a.miDetails = &mygo.MenuItem{
+		ID: "show-details", Label: "Show Details Sidebar", Type: mygo.MenuItemCheckbox, Checked: a.settings.ShowDetails,
+		Click: func(item *mygo.MenuItem, _ *mygo.Window) {
+			a.settings.ShowDetails = item.IsChecked()
+			a.invalidate()
+		},
+	}
 	a.miThemeSystem = &mygo.MenuItem{
 		ID: "theme-system", Label: "Follow System", Type: mygo.MenuItemRadio, Checked: a.settings.Theme == settings.ThemeSystem,
 		Click: click(func() { a.setTheme(settings.ThemeSystem) }),
@@ -152,6 +159,7 @@ func (a *App) buildMenu() {
 		a.miFullPaths,
 		mygo.Separator(),
 		a.miFilter,
+		a.miDetails,
 		a.miAdvanced,
 		mygo.Separator(),
 		a.miLockColumns,
@@ -258,6 +266,7 @@ func (a *App) setMode(jobs bool) {
 		return
 	}
 	a.modeJobs = jobs
+	a.selDirty = true
 	setMenuItemChecked(a.miModeStandard, !jobs)
 	setMenuItemChecked(a.miModeJob, jobs)
 	if jobs {
@@ -285,8 +294,10 @@ func (a *App) setAlgorithm(k hasher.Kind) {
 	}
 	if a.algo != k && len(a.store) > 0 {
 		a.store = nil
+		a.byID = nil
 		a.viewRows = nil
 		a.selection.Clear()
+		a.selDirty = true
 		a.jobSel.Clear()
 		a.comments = nil
 		a.elapsed = 0
@@ -360,6 +371,7 @@ func (a *App) syncViewMenu() {
 	setMenuItemChecked(a.miFullPaths, a.settings.ShowFullPaths)
 	setMenuItemChecked(a.miLockColumns, a.settings.LockColumns)
 	setMenuItemChecked(a.miFilter, a.settings.ShowFilter)
+	setMenuItemChecked(a.miDetails, a.settings.ShowDetails)
 	setMenuItemChecked(a.miAdvanced, a.settings.ShowAdvanced)
 	setMenuItemChecked(a.miModeStandard, !a.modeJobs)
 	setMenuItemChecked(a.miModeJob, a.modeJobs)

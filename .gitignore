@@ -2,6 +2,10 @@ GoSFV.exe
 GoSFV_simd.exe
 GoSFV.ini
 *.log
+*.test.exe
+*.test
+*.out
+
 _e2e/
 build/
 .mygo/

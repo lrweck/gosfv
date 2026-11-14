@@ -148,6 +148,8 @@ func (a *App) prepareJob(id int) (jobRun, bool) {
 	a.active = map[int32]activeFile{}
 	a.activeView = nil
 	a.store = nil
+	a.byID = nil
+	a.selDirty = true
 	a.viewRows = nil
 	a.gate = engine.NewGate()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -233,6 +235,8 @@ func (a *App) finishJob(id int, run jobRun, rep *runner.Report, err error) {
 			j.Elapsed = rep.Progress.Elapsed
 		}
 		a.store = nil
+		a.byID = nil
+		a.selDirty = true
 		a.viewRows = nil
 		a.notice = fmt.Sprintf("Job %s failed: %v", j.Name, err)
 		a.updateTitle()
@@ -248,6 +252,8 @@ func (a *App) finishJob(id int, run jobRun, rep *runner.Report, err error) {
 			j.Elapsed = rep.Progress.Elapsed
 		}
 		a.store = nil
+		a.byID = nil
+		a.selDirty = true
 		a.viewRows = nil
 		a.notice = fmt.Sprintf("Job %s stopped; no checksum file was written.", j.Name)
 		a.updateTitle()
@@ -291,6 +297,8 @@ func (a *App) finishJob(id int, run jobRun, rep *runner.Report, err error) {
 		}
 	}
 	a.store = nil
+	a.byID = nil
+	a.selDirty = true
 	a.viewRows = nil
 	a.updateTitle()
 	a.updateProblemMenus()

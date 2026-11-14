@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -16,6 +17,18 @@ func filesApp() *App {
 	a := testApp()
 	a.verifying = true
 	a.refreshColumns()
+	// Show the details sidebar populated without starting a background job:
+	// the tester does not run goroutines, and the stat fields would arrive
+	// after the frame.
+	a.store[0].Elapsed = 12 * time.Second
+	a.selection.Add(a.store[0].ID)
+	a.activeRow = 0
+	a.selSig = selectionSig{Count: 1, Active: 0}
+	a.sel = selectionInfo{Count: 1, Found: 1, HasSingle: true, Single: detailOf(&a.store[0])}
+	a.sel.Single.Size = 18 << 30
+	a.sel.Single.StatOK = true
+	a.sel.Single.ModTime = time.Date(2026, 11, 14, 16, 43, 0, 0, time.Local)
+	a.selDirty = false
 	return a
 }
 

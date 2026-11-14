@@ -16,6 +16,7 @@ func TestRoundTrip(t *testing.T) {
 	s.ShowThroughput = true
 	s.ShowFilter = true
 	s.ShowAdvanced = true
+	s.ShowDetails = true
 	s.ShowFullPaths = true
 	s.ShowHashCol = false
 	s.ShowExpectedCol = false
@@ -38,6 +39,7 @@ func TestRoundTrip(t *testing.T) {
 	got := Load(path)
 	if got.ShowTime != s.ShowTime || got.ShowThroughput != s.ShowThroughput ||
 		got.ShowFilter != s.ShowFilter || got.ShowAdvanced != s.ShowAdvanced ||
+		got.ShowDetails != s.ShowDetails ||
 		got.ShowFullPaths != s.ShowFullPaths || got.ShowHashCol != s.ShowHashCol ||
 		got.ShowExpectedCol != s.ShowExpectedCol || got.LockColumns != s.LockColumns ||
 		got.PathMode != s.PathMode || got.ProcMode != s.ProcMode ||

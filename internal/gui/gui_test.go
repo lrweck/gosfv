@@ -68,6 +68,18 @@ func TestViewRendersInBothAppearances(t *testing.T) {
 	}
 }
 
+func TestViewShowsDetailsSidebar(t *testing.T) {
+	a := testApp()
+	a.selection.Add(a.store[0].ID)
+	a.activeRow = 0
+	tt := ui.NewTester(a.view, 1200, 720)
+	for _, text := range []string{"Details", "a.bin", "Size", "Hash", "Expected"} {
+		if !tt.HasText(text) {
+			t.Errorf("details sidebar does not show %q", text)
+		}
+	}
+}
+
 func TestViewShowsFiles(t *testing.T) {
 	a := testApp()
 	tt := ui.NewTester(a.view, 1100, 700)

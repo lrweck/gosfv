@@ -72,6 +72,7 @@ type Settings struct {
 	ShowThroughput  bool
 	ShowFilter      bool
 	ShowAdvanced    bool
+	ShowDetails     bool
 	ShowFullPaths   bool
 	ShowHashCol     bool
 	ShowExpectedCol bool
@@ -94,6 +95,7 @@ type Settings struct {
 // Defaults returns the settings a new installation starts with.
 func Defaults() Settings {
 	return Settings{
+		ShowDetails:     true,
 		ShowHashCol:     true,
 		ShowExpectedCol: true,
 		LockColumns:     true,
@@ -151,6 +153,8 @@ func (s *Settings) set(key, val string) {
 		s.ShowFilter = val == "1"
 	case "showadvancedbar":
 		s.ShowAdvanced = val == "1"
+	case "showdetailspanel", "showdetails":
+		s.ShowDetails = val == "1"
 	case "showfullpaths":
 		s.ShowFullPaths = val == "1"
 	case "showhashcol":
@@ -232,6 +236,7 @@ func (s Settings) Save(path string) error {
 	fmt.Fprintf(&b, "ShowThroughputStats=%s\n", bit(s.ShowThroughput))
 	fmt.Fprintf(&b, "ShowFilterPanel=%s\n", bit(s.ShowFilter))
 	fmt.Fprintf(&b, "ShowAdvancedBar=%s\n", bit(s.ShowAdvanced))
+	fmt.Fprintf(&b, "ShowDetailsPanel=%s\n", bit(s.ShowDetails))
 	fmt.Fprintf(&b, "ShowFullPaths=%s\n", bit(s.ShowFullPaths))
 	fmt.Fprintf(&b, "ShowHashCol=%s\n", bit(s.ShowHashCol))
 	fmt.Fprintf(&b, "ShowExpectedHashCol=%s\n", bit(s.ShowExpectedCol))

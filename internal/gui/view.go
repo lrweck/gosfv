@@ -42,6 +42,18 @@ func (a *App) view(c *ui.Context) {
 		a.applyView()
 	}
 
+	// The details job is started here, while the previous frame's selection
+	// is known, and never does its work on this thread. A hidden sidebar
+	// does not start or keep one.
+	if a.settings.ShowDetails && !a.modeJobs {
+		a.refreshSelection(a.selDirty)
+	} else if a.sel.Count != 0 || a.sel.Loading {
+		a.cancelSelection()
+		a.sel = selectionInfo{}
+		a.selSig = selectionSig{}
+	}
+	a.selDirty = false
+
 	applyPalette(c)
 	t := c.Theme()
 	root := ui.Column(c).Fill()
@@ -54,23 +66,30 @@ func (a *App) view(c *ui.Context) {
 	root.Children(func() {
 		a.header(c)
 		a.statusBar(c)
-		if !a.modeJobs && a.settings.ShowFilter {
-			a.filterBar(c)
-		}
-		if !a.modeJobs && a.settings.ShowAdvanced {
-			a.advancedBar(c)
-		}
-		if a.verifying && len(a.comments) > 0 {
-			a.commentsBar(c)
-		}
-		if a.modeJobs {
-			a.jobTable(c)
-		} else {
-			a.fileTable(c)
-		}
-		if !a.modeJobs && len(a.activeView) > 0 {
-			a.activePanel(c)
-		}
+		ui.Row(c).Fill().AlignItems(ui.Stretch).Children(func() {
+			if a.settings.ShowDetails && !a.modeJobs {
+				a.detailsPanel(c)
+			}
+			ui.Column(c).Fill().Grow(1).Children(func() {
+				if !a.modeJobs && a.settings.ShowFilter {
+					a.filterBar(c)
+				}
+				if !a.modeJobs && a.settings.ShowAdvanced {
+					a.advancedBar(c)
+				}
+				if a.verifying && len(a.comments) > 0 {
+					a.commentsBar(c)
+				}
+				if a.modeJobs {
+					a.jobTable(c)
+				} else {
+					a.fileTable(c)
+				}
+				if !a.modeJobs && len(a.activeView) > 0 {
+					a.activePanel(c)
+				}
+			})
+		})
 		a.footer(c)
 	})
 	if a.renameOpen {
@@ -305,34 +324,51 @@ func (a *App) fileCell(c *ui.Context, row, col int) {
 	}
 	f := &a.store[a.viewRows[row]]
 	t := c.Theme()
+	chosen := a.selection.Has(f.ID)
+	textColor := t.Text
+	mutedColor := t.TextMuted
+	if chosen {
+		// The row is painted with the accent, so every cell has to use the
+		// text color meant for it.
+		textColor = t.AccentText
+		mutedColor = t.AccentText
+	}
 	switch a.cols[col].ID {
 	case "Name":
 		text := f.Rel
 		if a.settings.ShowFullPaths {
 			text = f.FullPath()
 		}
-		ui.Text(c, text).SingleLine().TextColor(a.statusColor(c, f.Status)).Tooltip(f.FullPath())
+		color := a.statusColor(c, f.Status)
+		if chosen {
+			color = t.AccentText
+		}
+		ui.Text(c, text).SingleLine().TextColor(color).Tooltip(f.FullPath())
 	case "Hash":
 		if f.Hash != nil {
 			h := hexfmt.Upper(f.Hash)
-			ui.Text(c, h).SingleLine().FontSize(11).Tooltip(h)
+			ui.Text(c, h).SingleLine().FontSize(11).TextColor(textColor).Tooltip(h)
 		} else if f.Status == model.Queued || f.Status == model.Pending {
-			ui.Text(c, "Pending").TextColor(t.TextMuted)
+			ui.Text(c, "Pending").TextColor(mutedColor)
 		} else {
-			ui.Text(c, "").TextColor(t.TextMuted)
+			ui.Text(c, "").TextColor(mutedColor)
 		}
 	case "Status":
-		ui.Text(c, f.Status.String()).SingleLine().Bold().TextColor(a.statusColor(c, f.Status))
+		color := a.statusColor(c, f.Status)
+		if chosen {
+			color = t.AccentText
+		}
+		ui.Text(c, f.Status.String()).SingleLine().Bold().TextColor(color)
 	case "Expected":
 		if len(f.Expected) > 0 {
 			h := hexfmt.Upper(f.Expected)
-			ui.Text(c, h).SingleLine().FontSize(11).Tooltip(h)
+			ui.Text(c, h).SingleLine().FontSize(11).TextColor(textColor).Tooltip(h)
 		} else {
-			ui.Text(c, "").TextColor(t.TextMuted)
+			ui.Text(c, "").TextColor(mutedColor)
 		}
 	case "Time":
 		if f.Elapsed > 0 {
-			ui.Textf(c, "%d ms", f.Elapsed.Milliseconds()).SingleLine().FontSize(11)
+			ui.Textf(c, "%d ms", f.Elapsed.Milliseconds()).SingleLine().FontSize(11).TextColor(textColor)
 		} else {
 			ui.Text(c, "")
 		}

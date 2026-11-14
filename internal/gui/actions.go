@@ -421,7 +421,9 @@ func (a *App) removeIndices(idx []int) {
 		a.store[i] = model.File{}
 	}
 	a.store = store
+	a.reindex()
 	a.selection.Clear()
+	a.selDirty = true
 	a.viewRows = nil
 	a.recountStats()
 	a.applyView()

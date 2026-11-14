@@ -15,6 +15,7 @@
 - **System, light or dark:** the window follows the desktop by default; **View > Appearance** and the Theme selector in the header switch it at once, and the choice is saved in `GoSFV.ini`.
 - **Three UI modes:** the standard file list, a job queue that processes folder drops sequentially, and the compact "create checksum" window used by Explorer.
 - **Headless mode:** scriptable create and verify with progress and exit codes.
+- **Details sidebar:** the clicked file shows its status, size, modification date, hashes and timing; a multi-selection gets a count, size, status breakdown, folder count and largest/smallest file. The summary runs off the main thread with a progress bar, and selections above 1000 files show their count only.
 - **Live progress:** throughput, ETA, per-file progress for files over 50 MiB, pause/resume and stop.
 - **Filtering:** instant name search, status filter, and duplicate detection by checksum.
 - **Bad-file tools:** move BAD/ERROR files into `_BAD_FILES`, rename them to `*.CORRUPT`, or generate `.bat` scripts to delete them or resolve duplicates.
@@ -179,6 +180,7 @@ hash algorithms still use their assembly/SIMD implementations.
 
 - Drop files or folders to create checksums, or drop a single checksum file to verify it.
 - The header keeps search, the **Files / Jobs** switch and the primary actions; the counts below it are color-coded chips.
+- Click a row to open its details in the sidebar; select several for a summary. Hide it with **View > Show Details Sidebar**.
 - Switch to **Mode > Job Queue Mode** and drop folders; each folder becomes a job whose checksum file is written beside it.
 - Select rows for copy, rename, delete, or moving bad files.
 - Pick **View > Appearance** (or the Theme selector) to follow the system, or force light or dark.
@@ -242,6 +244,7 @@ TimeTab=0
 ShowThroughputStats=0
 ShowFilterPanel=0
 ShowAdvancedBar=0
+ShowDetailsPanel=1
 ShowFullPaths=0
 ShowHashCol=1
 ShowExpectedHashCol=1
@@ -303,7 +306,7 @@ go test ./...
 $env:GOEXPERIMENT = "simd"; go test ./...
 ```
 
-The tests cover known hash vectors, hex round trips (including fuzz), both checksum syntaxes, legacy CRC endianness, parser allocation bounds, scanner behavior, filtering, CRC chunk combination, engine cancellation and progress, the runner, settings and theme compatibility, command-line parsing (single- and double-dash flags, `--`, invalid values), and the view in both palettes with `ui.Tester`.
+The tests cover known hash vectors, hex round trips (including fuzz), both checksum syntaxes, legacy CRC endianness, parser allocation bounds, scanner behavior, filtering, CRC chunk combination, engine cancellation and progress, the runner, settings and theme compatibility, command-line parsing (single- and double-dash flags, `--`, invalid values), the details snapshot (single-file stat, multi-selection summary, cancellation and the size limit), and the view in both palettes with `ui.Tester`.
 
 `TestRenderPreview` writes the light and dark renders used in this README without a display:
 

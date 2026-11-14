@@ -58,9 +58,17 @@ type App struct {
 
 	store     []model.File
 	viewRows  []int
+	byID      []int
 	list      ui.ListState
 	selection ui.Selection[uint64]
+	activeRow int
 	cols      []ui.TableColumn
+
+	sel       selectionInfo
+	selSig    selectionSig
+	selDirty  bool
+	selSeq    uint64
+	selCancel context.CancelFunc
 
 	jobs       []model.Job
 	jobList    ui.ListState
@@ -123,6 +131,7 @@ type App struct {
 	miLockColumns  *mygo.MenuItem
 	miFilter       *mygo.MenuItem
 	miAdvanced     *mygo.MenuItem
+	miDetails      *mygo.MenuItem
 	miModeStandard *mygo.MenuItem
 	miModeJob      *mygo.MenuItem
 	miClearJobs    *mygo.MenuItem
@@ -327,6 +336,8 @@ func (a *App) resetList() {
 	a.list = ui.ListState{}
 	a.list.KeepOffset = true
 	a.list.Sort = &a.sort
+	a.activeRow = -1
+	a.list.Selected = &a.activeRow
 	a.list.Selection = &a.selection
 	a.list.Key = func(row int) any {
 		if row < 0 || row >= len(a.viewRows) {
@@ -430,6 +441,7 @@ func (a *App) applyView() {
 	}
 	a.viewRows = view
 	a.appliedSort = a.sort
+	a.selDirty = true
 }
 
 func (a *App) sortView(view []int) {
@@ -589,6 +601,8 @@ func compareBytes(a, b []byte) int {
 
 func (a *App) installFiles(files []model.File) {
 	a.store = files
+	a.byID = nil // IDs are 1..n until a removal
+	a.selDirty = true
 	a.viewRows = make([]int, 0, len(files))
 	a.selection.Clear()
 	a.jobSel.Clear()
@@ -689,8 +703,10 @@ func (a *App) startRun(paths []string, base string, verify bool, checksumPath st
 	a.elapsed = 0
 	a.base = base
 	a.store = nil
+	a.byID = nil
 	a.viewRows = nil
 	a.selection.Clear()
+	a.selDirty = true
 	a.resetList()
 	a.gate = engine.NewGate()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -765,6 +781,7 @@ func (a *App) finishRun(rep *runner.Report, err error) {
 				Detail:  err.Error(),
 			})
 		}
+		a.selDirty = true
 		a.updateTitle()
 		a.updateProblemMenus()
 		a.invalidate()
@@ -789,6 +806,7 @@ func (a *App) finishRun(rep *runner.Report, err error) {
 			a.notice = fmt.Sprintf("%s is a sequential digest; each file uses one worker.", rep.Algo.ShortLabel())
 		}
 	}
+	a.selDirty = true
 	a.updateTitle()
 	a.updateProblemMenus()
 	a.syncAlgoMenu()
@@ -1000,8 +1018,10 @@ func (a *App) clearList() {
 		return
 	}
 	a.store = nil
+	a.byID = nil
 	a.viewRows = nil
 	a.selection.Clear()
+	a.selDirty = true
 	a.comments = nil
 	a.verifying = false
 	a.legacy = false
