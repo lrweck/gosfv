@@ -129,6 +129,7 @@ func (e *Engine) runCRCParallel(ctx context.Context) bool {
 	if workNum > len(plans) {
 		workNum = len(plans)
 	}
+	e.crcWorkers = workNum
 	wg.Add(workNum)
 	for w := 0; w < workNum; w++ {
 		go func() {

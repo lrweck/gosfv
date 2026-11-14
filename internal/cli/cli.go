@@ -244,7 +244,7 @@ func printSummary(rep *runner.Report, elapsed time.Duration) {
 	if rep.Workers > 0 {
 		line := fmt.Sprintf("Worker pool: %d", rep.Workers)
 		if rep.ParallelCRC {
-			line += " (CRC-32 file split across workers)"
+			line += fmt.Sprintf(" (CRC-32 file split across %d workers)", rep.CRCWorkers)
 		}
 		fmt.Println(line)
 	}

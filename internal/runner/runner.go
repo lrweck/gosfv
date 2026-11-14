@@ -101,6 +101,7 @@ type Report struct {
 	// one file may have been split across workers.
 	Workers     int
 	ParallelCRC bool
+	CRCWorkers  int
 }
 
 // Create scans inputs and hashes every file.
@@ -344,6 +345,7 @@ func run(ctx context.Context, files []model.File, opt Options, start time.Time, 
 	report.Legacy = legacy
 	report.Workers = eng.Workers()
 	report.ParallelCRC = eng.UsedCRCParallel()
+	report.CRCWorkers = eng.CRCWorkers()
 	report.Progress.Done = completed + missing + errorsPre
 	report.Progress.OK = counts.OK
 	report.Progress.Bad = counts.Bad

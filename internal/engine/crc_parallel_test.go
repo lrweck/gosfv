@@ -27,6 +27,9 @@ func TestParallelCRCSingleFile(t *testing.T) {
 	if !e.usedCRCParallel {
 		t.Fatal("single CRC file was not split across workers")
 	}
+	if e.CRCWorkers() != 4 {
+		t.Errorf("CRCWorkers = %d, want 4", e.CRCWorkers())
+	}
 	if err := e.Result(0).Err; err != nil {
 		t.Fatal(err)
 	}
@@ -57,6 +60,9 @@ func TestParallelCRCManyFiles(t *testing.T) {
 	e.Run(context.Background())
 	if !e.usedCRCParallel {
 		t.Fatal("two CRC files were not split across workers")
+	}
+	if e.CRCWorkers() != 8 {
+		t.Errorf("CRCWorkers = %d, want 8", e.CRCWorkers())
 	}
 	for i := range tasks {
 		want := crc32.ChecksumIEEE(all[i])
@@ -90,15 +96,15 @@ func TestCRCDefaultChunkPolicy(t *testing.T) {
 	small := makeFile("small.bin", 8<<20)
 	e := New([]Task{{Index: 0, Path: small, Size: 8 << 20}}, Options{Kind: hasher.CRC32, Workers: 4})
 	e.Run(context.Background())
-	if e.usedCRCParallel {
+	if e.usedCRCParallel || e.CRCWorkers() != 0 {
 		t.Error("an 8 MiB file should not split with an 8 MiB minimum chunk")
 	}
 	// 20 MiB is two chunks: two workers.
 	large := makeFile("large.bin", 20<<20)
 	e = New([]Task{{Index: 0, Path: large, Size: 20 << 20}}, Options{Kind: hasher.CRC32, Workers: 4})
 	e.Run(context.Background())
-	if !e.usedCRCParallel {
-		t.Error("a 20 MiB file should split into two chunks")
+	if !e.usedCRCParallel || e.CRCWorkers() != 2 {
+		t.Errorf("20 MiB: parallel=%v workers=%d, want 2", e.usedCRCParallel, e.CRCWorkers())
 	}
 	if err := e.Result(0).Err; err != nil {
 		t.Fatal(err)

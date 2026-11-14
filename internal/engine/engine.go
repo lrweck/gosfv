@@ -155,6 +155,7 @@ type Engine struct {
 
 	// usedCRCParallel is set when a CRC-32 run split files into chunks.
 	usedCRCParallel bool
+	crcWorkers      int
 }
 
 // New prepares an engine. Tasks must not be mutated until Run returns.
@@ -199,6 +200,10 @@ func (e *Engine) Workers() int { return workerCount(e.opt) }
 // UsedCRCParallel reports whether a CRC-32 run split files into chunks so that
 // one file used several workers.
 func (e *Engine) UsedCRCParallel() bool { return e.usedCRCParallel }
+
+// CRCWorkers returns how many workers actually hashed chunks in a split
+// CRC-32 run. It is 0 when the normal one-file-per-worker path ran.
+func (e *Engine) CRCWorkers() int { return e.crcWorkers }
 
 // Done reports whether task i finished (successfully or not).
 func (e *Engine) Done(i int) bool { return e.done[i].Load() == 1 }

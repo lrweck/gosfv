@@ -771,7 +771,7 @@ func (a *App) finishRun(rep *runner.Report, err error) {
 				a.notice = "No files matched."
 			}
 		} else if rep.ParallelCRC {
-			a.notice = fmt.Sprintf("CRC-32 split across %d workers.", rep.Workers)
+			a.notice = fmt.Sprintf("CRC-32 split across %d workers.", rep.CRCWorkers)
 		} else if rep.Workers > 1 && rep.Progress.Total < rep.Workers && rep.Algo != hasher.CRC32 {
 			a.notice = fmt.Sprintf("%s is a sequential digest; each file uses one worker.", rep.Algo.ShortLabel())
 		}

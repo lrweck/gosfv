@@ -3,6 +3,7 @@ package runner
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 
@@ -165,6 +166,9 @@ func TestCancelCreate(t *testing.T) {
 		cancel()
 	}()
 	rep, err := Create(ctx, []string{dir}, dir, opt)
+	if errors.Is(err, context.Canceled) {
+		return // the walk itself can observe the cancel
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
