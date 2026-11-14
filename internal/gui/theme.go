@@ -1,6 +1,8 @@
 package gui
 
 import (
+	"time"
+
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
@@ -52,10 +54,103 @@ func palette(dark bool) *ui.Theme {
 	return lightPalette
 }
 
+// themeFade is how long the colors take to move between the light and dark
+// palettes. The Windows title bar fades too; matching it avoids the flash
+// of an instant repaint.
+const themeFade = 200 * time.Millisecond
+
 // applyPalette makes the window use GoSFV's palette for the appearance the
-// frame resolved, which follows the system unless the user forced one.
-func applyPalette(c *ui.Context) {
-	c.SetTheme(palette(c.Theme().Dark))
+// frame resolved, which follows the system unless the user forced one. A
+// change blends from the colors on screen to the new ones.
+func (a *App) applyPalette(c *ui.Context) {
+	target := palette(c.Theme().Dark)
+	now := time.Now()
+	if a.themeTo == nil {
+		// First frame: start in the right palette, with no fade. The
+		// start is backdated so later frames do not schedule one either.
+		a.themeFrom, a.themeTo, a.themeAt = target, target, now.Add(-themeFade)
+		c.SetTheme(target)
+		return
+	}
+	if target != a.themeTo {
+		// Keep the colors currently on screen, which may themselves be
+		// halfway through another change.
+		a.themeFrom = a.fadeTheme(now)
+		a.themeTo = target
+		a.themeAt = now
+	}
+	if c.Preferences().ReduceMotion {
+		a.themeFrom, a.themeAt = target, now
+		c.SetTheme(target)
+		return
+	}
+	frac := fadeStep(now.Sub(a.themeAt))
+	if frac >= 1 {
+		a.themeFrom = target
+		c.SetTheme(target)
+		return
+	}
+	c.SetTheme(blendThemes(a.themeFrom, a.themeTo, frac))
+	c.After(16 * time.Millisecond)
+}
+
+// fadeTheme is the blended palette for now, used when a new change starts
+// before the last one finished.
+func (a *App) fadeTheme(now time.Time) *ui.Theme {
+	frac := fadeStep(now.Sub(a.themeAt))
+	switch {
+	case frac >= 1:
+		return a.themeTo
+	case frac <= 0:
+		return a.themeFrom
+	default:
+		return blendThemes(a.themeFrom, a.themeTo, frac)
+	}
+}
+
+// fadeStep maps elapsed time to 0..1 with a smoothstep curve, so the change
+// starts and ends gently instead of looking like a linear wipe.
+func fadeStep(elapsed time.Duration) float32 {
+	p := float32(elapsed) / float32(themeFade)
+	if p <= 0 {
+		return 0
+	}
+	if p >= 1 {
+		return 1
+	}
+	return p * p * (3 - 2*p)
+}
+
+func blendThemes(a, b *ui.Theme, t float32) *ui.Theme {
+	out := *b
+	out.Background = blendColor(a.Background, b.Background, t)
+	out.Surface = blendColor(a.Surface, b.Surface, t)
+	out.SurfaceHover = blendColor(a.SurfaceHover, b.SurfaceHover, t)
+	out.SurfacePressed = blendColor(a.SurfacePressed, b.SurfacePressed, t)
+	out.Border = blendColor(a.Border, b.Border, t)
+	out.Text = blendColor(a.Text, b.Text, t)
+	out.TextMuted = blendColor(a.TextMuted, b.TextMuted, t)
+	out.Accent = blendColor(a.Accent, b.Accent, t)
+	out.AccentHover = blendColor(a.AccentHover, b.AccentHover, t)
+	out.AccentPressed = blendColor(a.AccentPressed, b.AccentPressed, t)
+	out.AccentText = blendColor(a.AccentText, b.AccentText, t)
+	out.InactiveAccent = blendColor(a.InactiveAccent, b.InactiveAccent, t)
+	out.Danger = blendColor(a.Danger, b.Danger, t)
+	out.Warning = blendColor(a.Warning, b.Warning, t)
+	out.Success = blendColor(a.Success, b.Success, t)
+	out.Selection = blendColor(a.Selection, b.Selection, t)
+	out.Focus = blendColor(a.Focus, b.Focus, t)
+	out.Inverse = blendColor(a.Inverse, b.Inverse, t)
+	out.InverseText = blendColor(a.InverseText, b.InverseText, t)
+	out.Scrollbar = blendColor(a.Scrollbar, b.Scrollbar, t)
+	return &out
+}
+
+func blendColor(a, b ui.Color, t float32) ui.Color {
+	mix := func(x, y uint8) uint8 {
+		return uint8(float32(x) + (float32(y)-float32(x))*t + 0.5)
+	}
+	return ui.Color{R: mix(a.R, b.R), G: mix(a.G, b.G), B: mix(a.B, b.B), A: mix(a.A, b.A)}
 }
 
 // themeSource maps the saved preference to the library's source.

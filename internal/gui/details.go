@@ -36,10 +36,21 @@ func (a *App) detailsPanel(c *ui.Context) {
 			default:
 				a.emptyDetails(c)
 			}
-			if a.sel.Loading {
-				ui.Progress(c, a.sel.Progress).Height(3)
-				ui.Text(c, "Reading details...").FontSize(10).TextColor(t.TextMuted).SingleLine()
+			// The progress area keeps its height whether or not it shows:
+			// a bar that appeared and vanished between two frames is what
+			// reads as a flicker when moving through rows.
+			if a.sel.Loading && a.sel.Count == 1 {
+				// A stat is normally instant. Ask for a later frame so a
+				// slow one can still show the indicator without flashing
+				// it on every ordinary click.
+				c.After(selectionLoadingDelay + 10*time.Millisecond)
 			}
+			ui.Column(c).Height(22).Children(func() {
+				if a.showSelectionLoading(time.Now()) {
+					ui.Progress(c, a.sel.Progress).Height(3)
+					ui.Text(c, "Reading details...").FontSize(10).TextColor(t.TextMuted).SingleLine()
+				}
+			})
 		})
 	})
 }
@@ -47,6 +58,18 @@ func (a *App) detailsPanel(c *ui.Context) {
 // emptyDetails deliberately has the same blocks and row count as
 // singleDetails: selecting the first file fills values in instead of
 // replacing a short message with a taller panel.
+// selectionLoadingDelay hides the progress bar for the quick single-file
+// stat. A multi-selection shows it at once; a stat that really is slow
+// shows it after the delay.
+const selectionLoadingDelay = 120 * time.Millisecond
+
+func (a *App) showSelectionLoading(now time.Time) bool {
+	if !a.sel.Loading {
+		return false
+	}
+	return a.sel.Count > 1 || now.Sub(a.selAt) >= selectionLoadingDelay
+}
+
 func (a *App) emptyDetails(c *ui.Context) {
 	t := c.Theme()
 	ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
@@ -70,26 +93,36 @@ func (a *App) emptyDetails(c *ui.Context) {
 func (a *App) singleDetails(c *ui.Context, d *fileDetail) {
 	t := c.Theme()
 	color := a.statusColor(c, d.Status)
+	secondary := "reading…"
+	secondaryColor := t.TextMuted
+	switch {
+	case d.StatOK:
+		secondary = "on disk"
+	case d.StatErr != "":
+		secondary = "unavailable"
+		secondaryColor = t.Warning
+	}
 	ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
 		ui.Row(c).Padding(2, 8).Radius(999).Background(color.Alpha(0.13)).Shrink(0).Children(func() {
 			ui.Text(c, d.Status.String()).FontSize(10).Bold().TextColor(color).SingleLine()
 		})
-		if d.StatOK {
-			ui.Text(c, "on disk").FontSize(10).TextColor(t.TextMuted)
-		} else if d.StatErr != "" {
-			ui.Text(c, "unavailable").FontSize(10).TextColor(t.Warning)
+		tip := d.StatErr
+		if tip == "" {
+			tip = secondary
 		}
+		ui.Text(c, secondary).FontSize(10).TextColor(secondaryColor).SingleLine().Tooltip(tip)
 	})
 	ui.Text(c, d.Name).FontSize(15).Bold().SingleLine().Tooltip(d.Name)
 	ui.Text(c, d.Path).FontSize(10).TextColor(t.TextMuted).SingleLine().Tooltip(d.Path)
 	ui.Divider(c)
 	a.detailField(c, "Size", formatBytes(d.Size))
+	// Always present: the field goes from "—" to the date when the stat
+	// answers, instead of appearing and moving the rows below it.
+	modified := "—"
 	if d.StatOK {
-		a.detailField(c, "Modified", d.ModTime.Format("2006-01-02 15:04"))
+		modified = d.ModTime.Format("2006-01-02 15:04")
 	}
-	if d.StatErr != "" {
-		ui.Text(c, d.StatErr).FontSize(10).TextColor(t.Warning)
-	}
+	a.detailField(c, "Modified", modified)
 	a.detailField(c, "Elapsed", formatDuration(d.Elapsed))
 	folder := d.Dir
 	if folder == "" {

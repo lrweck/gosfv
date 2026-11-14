@@ -52,7 +52,7 @@ func (a *App) view(c *ui.Context) {
 		a.selDirty = false
 	}
 
-	applyPalette(c)
+	a.applyPalette(c)
 	t := c.Theme()
 	root := ui.Column(c).Fill()
 	if root.FileDragOver() {
@@ -172,6 +172,18 @@ func (a *App) statusBar(c *ui.Context) {
 			ui.Text(c, "Legacy SFV byte order").FontSize(11).Bold().TextColor(t.Warning)
 		}
 		ui.Spacer(c)
+		if a.processing {
+			label := "Pause"
+			if a.paused {
+				label = "Resume"
+			}
+			if ui.Button(c, label).Tooltip("Pause or resume the current run").Clicked() {
+				a.togglePause()
+			}
+			if ui.Button(c, "Stop").Tooltip("Stop the current run; finished files keep their status").TextColor(t.Danger).Clicked() {
+				a.stopRun()
+			}
+		}
 		ui.Text(c, "Hash").FontSize(11).TextColor(t.TextMuted)
 		choice := a.algo.ShortLabel()
 		sel := ui.Select(c, &choice, algorithmOptions).Width(120).Disabled(a.processing || a.verifying || a.modeJobs)
@@ -552,7 +564,7 @@ func (a *App) createView(c *ui.Context) {
 	if a.sortDirty {
 		a.sortDirty = false
 	}
-	applyPalette(c)
+	a.applyPalette(c)
 	t := c.Theme()
 	ui.Column(c).Fill().Padding(16).Gap(8).Children(func() {
 		ui.Text(c, "Creating checksums").FontSize(16).Bold()

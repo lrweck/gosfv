@@ -24,13 +24,10 @@ func TestComputeSelectionSingleStats(t *testing.T) {
 	computeSelection(context.Background(), 1, []model.File{f}, func(info selectionInfo) {
 		updates = append(updates, info)
 	})
-	if len(updates) != 2 {
-		t.Fatalf("updates = %d, want 2", len(updates))
+	if len(updates) != 1 {
+		t.Fatalf("updates = %d, want 1", len(updates))
 	}
-	if !updates[0].Loading || !updates[0].HasSingle {
-		t.Errorf("first update = %+v", updates[0])
-	}
-	last := updates[len(updates)-1]
+	last := updates[0]
 	if last.Loading || last.Progress != 1 {
 		t.Errorf("last update = %+v", last)
 	}

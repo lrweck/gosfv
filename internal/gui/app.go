@@ -51,6 +51,10 @@ type App struct {
 	settingsPath string
 	settingsSave bool
 
+	themeFrom *ui.Theme
+	themeTo   *ui.Theme
+	themeAt   time.Time
+
 	mu      sync.Mutex
 	active  map[int32]activeFile
 	closing atomic.Bool
@@ -68,6 +72,7 @@ type App struct {
 	selSig    selectionSig
 	selDirty  bool
 	selSeq    uint64
+	selAt     time.Time
 	selCancel context.CancelFunc
 
 	jobs       []model.Job

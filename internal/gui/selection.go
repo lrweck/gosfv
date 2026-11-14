@@ -99,6 +99,7 @@ func (a *App) refreshSelection(force bool) {
 		return
 	}
 	seq := a.selSeq
+	a.selAt = time.Now()
 	a.sel = selectionInfo{Count: n, Found: len(files), Loading: true, Active: a.activeRow}
 	if len(files) == 1 {
 		// The model already knows the name, status, size and digests; show
@@ -224,7 +225,8 @@ func computeSelection(ctx context.Context, count int, files []model.File, emit f
 		d := detailOf(&files[0])
 		info.HasSingle = true
 		info.Single = d
-		emit(info)
+		// The caller already painted these known facts; emitting them
+		// again would only repaint the same panel before the stat answer.
 		if ctx.Err() != nil {
 			return
 		}

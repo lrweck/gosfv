@@ -12,7 +12,7 @@
 - **Checksum files:** `.sfv`, `.md5`, `.sha1`, `.sha256` and `.xxh3`.
 - **Both legacy syntaxes:** `HASH *filename` and CRC-32's `filename HASH`.
 - **Legacy SFV byte order:** CRC-32 written with the opposite endianness is recognized and reported, not marked BAD.
-- **System, light or dark:** the window follows the desktop by default; **View > Appearance** and the Theme selector in the header switch it at once, and the choice is saved in `GoSFV.ini`.
+- **System, light or dark:** the window follows the desktop by default; **View > Appearance** and the Theme selector in the header switch it with a short fade, and the choice is saved in `GoSFV.ini`.
 - **Three UI modes:** the standard file list, a job queue that processes folder drops sequentially, and the compact "create checksum" window used by Explorer.
 - **Headless mode:** scriptable create and verify with progress and exit codes.
 - **Details sidebar:** the clicked file shows its status, size, modification date, hashes and timing; a multi-selection gets a count, size, status breakdown, folder count and largest/smallest file. The summary runs off the main thread with a progress bar, and selections above 1000 files show their count only.
@@ -184,6 +184,7 @@ hash algorithms still use their assembly/SIMD implementations.
 - Switch to **Mode > Job Queue Mode** and drop folders; each folder becomes a job whose checksum file is written beside it.
 - Select rows for copy, rename, delete, or moving bad files.
 - Pick **View > Appearance** (or the Theme selector) to follow the system, or force light or dark.
+- While a run is active, **Pause/Resume** and **Stop** sit in the status bar, and **Mode > Pause / Resume Run** and **Stop Run** bind them to F7 and F8.
 - Use **Options > System Integration** to add or remove Explorer entries.
 
 ### Command line

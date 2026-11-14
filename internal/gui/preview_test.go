@@ -59,6 +59,12 @@ func TestRenderPreview(t *testing.T) {
 		}
 		return a
 	}
+	running := func() *App {
+		a := filesApp()
+		a.processing = true
+		a.stats = runner.Progress{Total: 10, Done: 4, OK: 3, Bad: 1, SpeedBPS: 800 << 20, ETA: 30 * time.Second}
+		return a
+	}
 	cases := []struct {
 		name string
 		app  func() *App
@@ -68,6 +74,7 @@ func TestRenderPreview(t *testing.T) {
 		{"gosfv-files-dark.png", filesApp, true},
 		{"gosfv-empty-light.png", empty, false},
 		{"gosfv-jobs-dark.png", jobs, true},
+		{"gosfv-running-light.png", running, false},
 	}
 	for _, tc := range cases {
 		a := tc.app()

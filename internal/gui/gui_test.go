@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -37,6 +38,45 @@ func testApp() *App {
 	a.list.Key = func(row int) any { return a.store[a.viewRows[row]].ID }
 	a.list.Label = func(row int) string { return a.store[a.viewRows[row]].Name }
 	return a
+}
+
+func TestFadeStep(t *testing.T) {
+	if got := fadeStep(0); got != 0 {
+		t.Errorf("start = %v", got)
+	}
+	if got := fadeStep(themeFade); got != 1 {
+		t.Errorf("end = %v", got)
+	}
+	mid := fadeStep(themeFade / 2)
+	if mid < 0.49 || mid > 0.51 {
+		t.Errorf("middle = %v", mid)
+	}
+	if fadeStep(themeFade/4) >= mid {
+		t.Error("fade is not monotonic")
+	}
+}
+
+func TestBlendColor(t *testing.T) {
+	got := blendColor(ui.RGB(0, 0, 0), ui.RGB(200, 100, 50), 0.5)
+	if got.R != 100 || got.G != 50 || got.B != 25 || got.A != 255 {
+		t.Errorf("blend = %+v", got)
+	}
+}
+
+func TestBlendThemesKeepsTargetAppearance(t *testing.T) {
+	mid := blendThemes(lightPalette, darkPalette, 0.5)
+	if mid.Dark != darkPalette.Dark {
+		t.Error("blended theme lost the target appearance")
+	}
+	if mid.Background == lightPalette.Background || mid.Background == darkPalette.Background {
+		t.Error("background did not blend")
+	}
+	if mid.Accent == lightPalette.Accent || mid.Accent == darkPalette.Accent {
+		t.Error("accent did not blend")
+	}
+	if mid.Radius != darkPalette.Radius || mid.Spacing != darkPalette.Spacing {
+		t.Error("metrics should come from the target")
+	}
 }
 
 func TestThemePalettes(t *testing.T) {
@@ -80,6 +120,37 @@ func TestViewShowsDetailsSidebar(t *testing.T) {
 	}
 }
 
+func TestSelectionLoadingDelay(t *testing.T) {
+	a := &App{
+		sel:   selectionInfo{Loading: true, Count: 1, HasSingle: true},
+		selAt: time.Now(),
+	}
+	if a.showSelectionLoading(a.selAt.Add(10 * time.Millisecond)) {
+		t.Error("single-file stat flashed before the delay")
+	}
+	if !a.showSelectionLoading(a.selAt.Add(selectionLoadingDelay)) {
+		t.Error("single-file stat never showed the indicator")
+	}
+	a.sel.Count = 2
+	if !a.showSelectionLoading(a.selAt.Add(time.Millisecond)) {
+		t.Error("multi-selection did not show the indicator at once")
+	}
+}
+
+func TestPauseAndStopButtons(t *testing.T) {
+	a := testApp()
+	a.processing = true
+	tt := ui.NewTester(a.view, 1200, 720)
+	if !tt.HasText("Pause") || !tt.HasText("Stop") {
+		t.Fatalf("run controls missing; texts: %v", tt.Texts())
+	}
+	a.paused = true
+	tt.Frame()
+	if !tt.HasText("Resume") {
+		t.Error("paused run does not offer Resume")
+	}
+}
+
 func TestDetailsSidebarFollowsClick(t *testing.T) {
 	a := testApp()
 	tt := ui.NewTester(a.view, 1200, 720)
@@ -91,6 +162,12 @@ func TestDetailsSidebarFollowsClick(t *testing.T) {
 	}
 	if tt.HasText("Click a file to inspect it.") {
 		t.Error("sidebar still shows the empty state after a click")
+	}
+	if err := tt.Click("c.bin"); err != nil {
+		t.Fatal(err)
+	}
+	if a.sel.Single.Name != "c.bin" {
+		t.Errorf("sidebar did not follow the second click: %q", a.sel.Single.Name)
 	}
 }
 

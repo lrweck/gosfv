@@ -66,6 +66,9 @@ func (a *App) buildMenu() {
 		a.miModeJob,
 		mygo.Separator(),
 		a.miClearJobs,
+		mygo.Separator(),
+		{Label: "Pause / Resume Run", Accelerator: "F7", Click: click(a.togglePause)},
+		{Label: "Stop Run", Accelerator: "F8", Click: click(a.stopRun)},
 	}}
 
 	a.miShowHash = &mygo.MenuItem{
