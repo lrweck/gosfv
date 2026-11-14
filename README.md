@@ -65,19 +65,19 @@ A 20 MiB file, cached, 20 logical cores (`BenchmarkCRCChunkSizes20MiB`):
 
 | Minimum chunk | Chunks / workers | Throughput |
 | --- | --- | --- |
-| 1 MiB | 20 / 20 | 3967 MB/s |
-| 2 MiB | 10 / 10 | 3900 MB/s |
-| 4 MiB | 5 / 5 | 4500 MB/s |
-| **8 MiB** | **2 / 2** | **5194 MB/s** |
-| 16 MiB | 1 / 1 | 3712 MB/s |
+| 1 MiB | 20 / 20 | 3978 MB/s |
+| 2 MiB | 10 / 10 | 4215 MB/s |
+| 4 MiB | 5 / 5 | 4233 MB/s |
+| **8 MiB** | **2 / 2** | **5086 MB/s** |
+| 16 MiB | 1 / 1 | 3641 MB/s |
 
 On a 512 MiB file, 1–16 MiB minimums all produce the 20-chunk cap, so they
-measure within noise of each other (about 3.9–4.1 GB/s); letting the cap use
-fewer but larger chunks (32–64 MiB) reached 4.25–5.05 GB/s on the cached file,
+measure within noise of each other (about 3.5–4.5 GB/s); letting the cap use
+fewer but larger chunks (32–64 MiB) reached 4.4–5.1 GB/s on the cached file,
 but that leaves cores idle on mid-size files. 8 MiB was the best compromise:
 two chunks for a 20 MiB file and full parallelism from roughly 160 MiB up.
 
-The end-to-end engine is I/O bound, so a real run is bounded by the disk, not the hash. On a cached 8 MiB file the xxHash3 path measures about 3.7 GB/s including open, read and result handling, with 11 allocations for the entire run.
+The end-to-end engine is I/O bound, so a real run is bounded by the disk, not the hash. On a cached 8 MiB file the xxHash3 path measures about 1.7 GB/s through `os.File`, including open, read and result handling, with 15 allocations for the entire run. The pure hasher reaches 49.7 GB/s; the read path is the limit.
 
 ### Go 1.27 SIMD
 
