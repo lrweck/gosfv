@@ -5,11 +5,10 @@ import (
 	"encoding/binary"
 	"hash/crc32"
 	"io"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"gosfv/internal/fio"
 )
 
 // DefaultCRCChunkSize is the minimum size of a CRC-32 chunk. An 8 MiB
@@ -142,7 +141,7 @@ func (e *Engine) runCRCParallel(ctx context.Context) bool {
 				}
 				ch := plans[j]
 				t := &e.tasks[ch.task]
-				f, err := fio.Open(t.Path)
+				f, err := os.Open(t.Path)
 				if err != nil {
 					errMu.Lock()
 					if errs[ch.task] == nil {

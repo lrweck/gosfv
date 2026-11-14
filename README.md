@@ -103,7 +103,7 @@ This is the honest limit of standard checksum formats. The GUI and CLI both foll
 ### Idiomatic Go interfaces
 
 - `hasher.Kind.New() hash.Hash`: the engine hashes through the standard `hash.Hash` interface, which embeds `io.Writer`. Any implementation can be plugged in.
-- `internal/fio.File` implements `io.Reader` and `io.ReaderAt`; the CRC chunk path uses `io.ReaderAt` so chunks never share a file pointer.
+- `*os.File` implements `io.Reader` and `io.ReaderAt`; the CRC chunk path uses `io.ReaderAt` so chunks never share a file pointer.
 - `checksum.ParseFile` opens an `io.Reader` and calls `checksum.ParseReader`; `checksum.WriteFile` calls `checksum.WriteTo(io.Writer, ...)`. The parser, writer and CLI compose with files, pipes and buffers without special cases.
 - Optional behavior is a consumer-owned interface: `engine.Options` takes callbacks, `runner.Options` takes the same progress/files hooks, and the UI and CLI are two adapters over the same runner.
 
@@ -120,9 +120,10 @@ This is the honest limit of standard checksum formats. The GUI and CLI both foll
 
 ### Scanning and I/O
 
-- On Windows, directories are enumerated with `FindFirstFile`/`FindNextFile`, which returns attributes and file size in the directory listing. This avoids an extra stat per file and skips hidden, system and reparse entries without opening them.
-- Files are opened with `CreateFile` and read with `ReadFile` directly (`internal/fio`), avoiding `os.File`'s finalizer and poller setup. `FILE_FLAG_SEQUENTIAL_SCAN` enables read-ahead.
+- Directories are walked with `filepath.WalkDir`. Filters use `filepath.Match`; relative paths use `filepath.Rel`; deduplication is a map of cleaned paths.
+- Files are opened with `os.Open` and read with `os.File.Read`. The parallel CRC path uses `os.File.ReadAt`, which is safe from several goroutines and maps to the platform's positional read.
 - The engine uses one sequential reader (8 MiB buffer) for a mechanical disk or network share, and one reader per `GOMAXPROCS` worker (about 1 MiB each) for flash.
+- Custom code is kept for what the standard library does not provide: the CRC-32 block combiner, rotational-drive detection, the Explorer registry entries, the checksum-format parser, and the SIMD/SWAR hex codec.
 - Drive type comes from `IOCTL_STORAGE_QUERY_PROPERTY` on the volume, then the physical disk when BitLocker or RAID hides the volume, then the device product name. A device that refuses every query is treated as flash; `Options > Processing Mode` overrides this.
 
 ## Build
@@ -242,8 +243,7 @@ internal/
   hasher/               algorithm names, hashers, benchmarks
   hexfmt/               SIMD (Go 1.27) and portable hex codecs
   checksum/             parser, writer, endian-aware verification helpers
-  scanner/              Win32 directory walker, filters, common base, wildcard matching
-  fio/                  CreateFile/ReadFile on Windows, os.File elsewhere
+  scanner/              filepath.WalkDir, filters, common base, wildcard matching
   engine/               worker pool, pause gate, progress, result arena
   runner/               scan -> hash -> status pipeline used by GUI and CLI
   model/                File, Job and status types
@@ -276,7 +276,7 @@ go test ./...
 $env:GOEXPERIMENT = "simd"; go test ./...
 ```
 
-The tests cover known hash vectors, hex round trips (including fuzz), both checksum syntaxes, legacy CRC endianness, parser allocation bounds, the Win32/generic scanner behavior, filtering, engine cancellation and progress, the runner, settings compatibility and the view itself with `ui.Tester`.
+The tests cover known hash vectors, hex round trips (including fuzz), both checksum syntaxes, legacy CRC endianness, parser allocation bounds, scanner behavior, filtering, CRC chunk combination, engine cancellation and progress, the runner, settings compatibility and the view itself with `ui.Tester`.
 
 ## Differences from SharpSFV
 

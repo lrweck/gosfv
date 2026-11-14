@@ -16,12 +16,12 @@ import (
 	"context"
 	"hash"
 	"io"
+	"os"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"gosfv/internal/fio"
 	"gosfv/internal/hasher"
 )
 
@@ -281,7 +281,7 @@ func (e *Engine) worker(ctx context.Context) {
 }
 
 func (e *Engine) hashOne(ctx context.Context, h hash.Hash, t *Task, buf []byte, pos int) (int64, error) {
-	f, err := fio.Open(t.Path)
+	f, err := os.Open(t.Path)
 	if err != nil {
 		return 0, err
 	}
@@ -289,7 +289,9 @@ func (e *Engine) hashOne(ctx context.Context, h hash.Hash, t *Task, buf []byte, 
 
 	size := t.Size
 	if size <= 0 {
-		size = f.Size()
+		if info, statErr := f.Stat(); statErr == nil {
+			size = info.Size()
+		}
 	}
 	report := e.opt.OnFileProgress != nil && size >= LargeFileThreshold
 	h.Reset()
