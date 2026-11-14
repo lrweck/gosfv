@@ -47,8 +47,8 @@ CRC-32 on one 64 MiB file, cached, with the default worker count on a
 20-thread machine (`go test -bench BenchmarkCRC32 ./internal/engine`):
 
 ```text
-BenchmarkCRC32OneWorker   5441 MB/s   1 worker
-BenchmarkCRC32AllCores    7582 MB/s   20 chunk workers, 1 file
+BenchmarkCRC32OneWorker   4578 MB/s   1 worker
+BenchmarkCRC32AllCores    6559 MB/s   20 chunk workers, 1 file
 ```
 
 The parallel CRC run does more than one core's work on one file and produces
