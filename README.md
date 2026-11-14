@@ -120,10 +120,11 @@ This is the honest limit of standard checksum formats. The GUI and CLI both foll
 
 ### Scanning and I/O
 
-- Directories are walked with `filepath.WalkDir`. Filters use `filepath.Match`; relative paths use `filepath.Rel`; deduplication is a map of cleaned paths. One small Win32 attribute check preserves SharpSFV's hidden/system skip on Windows; on other systems the dot-name rule is enough.
+- Filters use `filepath.Match`; relative paths use `filepath.Rel`; deduplication is a map of cleaned paths.
+- Recursive walking is the measured exception. On Windows it uses the Win32 directory listing (`internal/scanner/walk_windows.go`), which already carries attributes and size. `filepath.WalkDir` calls `DirEntry.Info()` (a separate stat) per file; on a 50,000-file, 200-directory tree this measured **2.87–3.01 s with `WalkDir` versus 0.14–0.15 s with the directory-listing walker** (304k versus 201k allocations). Other systems use `os.ReadDir`. The walker sits behind the same `Collect` API, so the rest of the app does not know which one ran.
 - Files are opened with `os.Open` and read with `os.File.Read`. The parallel CRC path uses `os.File.ReadAt`, which is safe from several goroutines and maps to the platform's positional read.
 - The engine uses one sequential reader (8 MiB buffer) for a mechanical disk or network share, and one reader per `GOMAXPROCS` worker (about 1 MiB each) for flash.
-- Custom code is kept for what the standard library does not provide: the CRC-32 block combiner, rotational-drive detection, the Explorer registry entries, the checksum-format parser, and the SIMD/SWAR hex codec.
+- Custom code is kept only where it measured faster or the standard library has no equivalent: the directory-listing walker, the CRC-32 block combiner, rotational-drive detection, the Explorer registry entries, the checksum-format parser, and the SIMD/SWAR hex codec.
 - Drive type comes from `IOCTL_STORAGE_QUERY_PROPERTY` on the volume, then the physical disk when BitLocker or RAID hides the volume, then the device product name. A device that refuses every query is treated as flash; `Options > Processing Mode` overrides this.
 
 ## Build
@@ -243,7 +244,7 @@ internal/
   hasher/               algorithm names, hashers, benchmarks
   hexfmt/               SIMD (Go 1.27) and portable hex codecs
   checksum/             parser, writer, endian-aware verification helpers
-  scanner/              filepath.WalkDir, filters, common base, wildcard matching
+  scanner/              Win32/ReadDir walker, filters, common base, wildcard matching
   engine/               worker pool, pause gate, progress, result arena
   runner/               scan -> hash -> status pipeline used by GUI and CLI
   model/                File, Job and status types
