@@ -8,10 +8,10 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"gosfv/internal/hasher"
-	"gosfv/internal/model"
-	"gosfv/internal/runner"
-	"gosfv/internal/settings"
+	"github.com/lrweck/gosfv/internal/hasher"
+	"github.com/lrweck/gosfv/internal/model"
+	"github.com/lrweck/gosfv/internal/runner"
+	"github.com/lrweck/gosfv/internal/settings"
 )
 
 func testApp() *App {

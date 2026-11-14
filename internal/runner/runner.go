@@ -16,11 +16,11 @@ import (
 	"slices"
 	"time"
 
-	"gosfv/internal/checksum"
-	"gosfv/internal/engine"
-	"gosfv/internal/hasher"
-	"gosfv/internal/model"
-	"gosfv/internal/scanner"
+	"github.com/lrweck/gosfv/internal/checksum"
+	"github.com/lrweck/gosfv/internal/engine"
+	"github.com/lrweck/gosfv/internal/hasher"
+	"github.com/lrweck/gosfv/internal/model"
+	"github.com/lrweck/gosfv/internal/scanner"
 )
 
 // ScanOptions controls the directory walk used by Create.

@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"gosfv/internal/checksum"
-	"gosfv/internal/hasher"
-	"gosfv/internal/hexfmt"
-	"gosfv/internal/model"
+	"github.com/lrweck/gosfv/internal/checksum"
+	"github.com/lrweck/gosfv/internal/hasher"
+	"github.com/lrweck/gosfv/internal/hexfmt"
+	"github.com/lrweck/gosfv/internal/model"
 )
 
 type capture struct {

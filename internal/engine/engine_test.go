@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"gosfv/internal/hasher"
-	"gosfv/internal/hexfmt"
+	"github.com/lrweck/gosfv/internal/hasher"
+	"github.com/lrweck/gosfv/internal/hexfmt"
 )
 
 func writeFile(t *testing.T, path string, data []byte) {

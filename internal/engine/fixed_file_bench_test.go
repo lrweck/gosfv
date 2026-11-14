@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"gosfv/internal/hasher"
+	"github.com/lrweck/gosfv/internal/hasher"
 )
 
 // BenchmarkFixedFile reads the same large file in both I/O implementations.

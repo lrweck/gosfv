@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"gosfv/internal/hasher"
-	"gosfv/internal/settings"
+	"github.com/lrweck/gosfv/internal/hasher"
+	"github.com/lrweck/gosfv/internal/settings"
 )
 
 // Flags is the parsed command line. The same flags serve the window and

@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"testing"
 
-	"gosfv/internal/hasher"
+	"github.com/lrweck/gosfv/internal/hasher"
 )
 
 // BenchmarkCRCChunkSizes answers one question: how large should a CRC-32

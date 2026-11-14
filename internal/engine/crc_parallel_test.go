@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"gosfv/internal/hasher"
+	"github.com/lrweck/gosfv/internal/hasher"
 )
 
 func TestParallelCRCSingleFile(t *testing.T) {

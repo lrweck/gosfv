@@ -11,13 +11,13 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"gosfv/internal/badtools"
-	"gosfv/internal/checksum"
-	"gosfv/internal/drive"
-	"gosfv/internal/hexfmt"
-	"gosfv/internal/model"
-	"gosfv/internal/settings"
-	"gosfv/internal/shell"
+	"github.com/lrweck/gosfv/internal/badtools"
+	"github.com/lrweck/gosfv/internal/checksum"
+	"github.com/lrweck/gosfv/internal/drive"
+	"github.com/lrweck/gosfv/internal/hexfmt"
+	"github.com/lrweck/gosfv/internal/model"
+	"github.com/lrweck/gosfv/internal/settings"
+	"github.com/lrweck/gosfv/internal/shell"
 )
 
 func (a *App) openDialog() {
@@ -683,10 +683,10 @@ func (a *App) showCredits() {
 		Type:    mygo.MessageInfo,
 		Title:   "About GoSFV",
 		Message: "GoSFV 1.0.0",
-		Detail: "A Go port of SharpSFV, inspired by QuickSFV.\n\n" +
-			"SharpSFV by L33T (GPL-3.0): https://github.com/Wishwanderer/SharpSFV\n" +
+		Detail: "A fast checksum creator and verifier with a native Go interface.\n\n" +
+			"Project: https://github.com/lrweck/gosfv\n" +
 			"Native UI by MyGo 0.9.0: https://github.com/egoist/mygo\n\n" +
-			"GoSFV is licensed under GPL-3.0.",
+			"GoSFV is licensed under GPL-3.0; see NOTICE for attribution.",
 	})
 }
 

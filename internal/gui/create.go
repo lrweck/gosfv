@@ -8,8 +8,8 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"gosfv/internal/hasher"
-	"gosfv/internal/scanner"
+	"github.com/lrweck/gosfv/internal/hasher"
+	"github.com/lrweck/gosfv/internal/scanner"
 )
 
 // scheduleCreate coalesces the paths Explorer sends when several files are

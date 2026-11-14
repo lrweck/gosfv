@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"gosfv/internal/hexfmt"
+	"github.com/lrweck/gosfv/internal/hexfmt"
 )
 
 var vectors = []struct {

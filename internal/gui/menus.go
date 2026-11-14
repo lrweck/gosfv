@@ -6,11 +6,11 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"gosfv/internal/drive"
-	"gosfv/internal/hasher"
-	"gosfv/internal/runner"
-	"gosfv/internal/settings"
-	"gosfv/internal/shell"
+	"github.com/lrweck/gosfv/internal/drive"
+	"github.com/lrweck/gosfv/internal/hasher"
+	"github.com/lrweck/gosfv/internal/runner"
+	"github.com/lrweck/gosfv/internal/settings"
+	"github.com/lrweck/gosfv/internal/shell"
 )
 
 // setMenuItemEnabled and setMenuItemChecked skip updates that change
@@ -228,13 +228,13 @@ func (a *App) buildMenu() {
 
 	help := &mygo.MenuItem{Label: "Help", Submenu: []*mygo.MenuItem{
 		{Label: "Disk and Backend Info", Click: click(a.showDiskInfo)},
-		{Label: "Open SharpSFV Project", Click: click(func() {
-			_ = mygo.Shell.OpenExternal("https://github.com/Wishwanderer/SharpSFV")
+		{Label: "Open Project Page", Click: click(func() {
+			_ = mygo.Shell.OpenExternal("https://github.com/lrweck/gosfv")
 		})},
 		mygo.Separator(),
 		{Label: "Reset to Default Values", Click: click(a.resetDefaults)},
 		mygo.Separator(),
-		{Label: "Credits", Click: click(a.showCredits)},
+		{Label: "About GoSFV", Click: click(a.showCredits)},
 	}}
 
 	menu := mygo.NewMenu([]*mygo.MenuItem{

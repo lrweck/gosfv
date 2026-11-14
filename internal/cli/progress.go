@@ -7,8 +7,8 @@ import (
 
 	"github.com/schollz/progressbar/v3"
 
-	"gosfv/internal/model"
-	"gosfv/internal/runner"
+	"github.com/lrweck/gosfv/internal/model"
+	"github.com/lrweck/gosfv/internal/runner"
 )
 
 // progressUI is the terminal presentation. Progress goes to stderr so that

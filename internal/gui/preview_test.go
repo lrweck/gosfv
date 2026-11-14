@@ -8,8 +8,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"gosfv/internal/model"
-	"gosfv/internal/runner"
+	"github.com/lrweck/gosfv/internal/model"
+	"github.com/lrweck/gosfv/internal/runner"
 )
 
 func filesApp() *App {

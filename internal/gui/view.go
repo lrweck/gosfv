@@ -6,10 +6,10 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"gosfv/internal/hasher"
-	"gosfv/internal/hexfmt"
-	"gosfv/internal/model"
-	"gosfv/internal/settings"
+	"github.com/lrweck/gosfv/internal/hasher"
+	"github.com/lrweck/gosfv/internal/hexfmt"
+	"github.com/lrweck/gosfv/internal/model"
+	"github.com/lrweck/gosfv/internal/settings"
 )
 
 var (

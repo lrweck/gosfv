@@ -4,7 +4,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"gosfv/internal/settings"
+	"github.com/lrweck/gosfv/internal/settings"
 )
 
 // The palettes start from the library's defaults, which are complete and

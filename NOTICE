@@ -1,12 +1,13 @@
 GoSFV
 =====
 
-GoSFV is a Go port of SharpSFV (https://github.com/Wishwanderer/SharpSFV),
-which is licensed under the GNU General Public License v3.0.
+GoSFV (https://github.com/lrweck/gosfv) began as a Go reimplementation of
+SharpSFV (https://github.com/Wishwanderer/SharpSFV), which is licensed under
+the GNU General Public License v3.0.
 
 SharpSFV is the original work: its architecture, checksum formats, legacy
-CRC-32 endian handling and command-line behavior informed this port. GoSFV
-reimplements those behaviors in Go and adds a native MyGo interface.
+CRC-32 endian handling and command-line behavior informed this project. GoSFV
+reimplements those behaviors in Go and adds its own native MyGo interface.
 
 Third-party components:
 

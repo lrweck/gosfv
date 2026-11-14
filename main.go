@@ -1,5 +1,4 @@
-// GoSFV is a checksum creator and verifier: a Go port of SharpSFV, with native
-// UI from MyGo.
+// GoSFV is a checksum creator and verifier with a native UI from MyGo.
 package main
 
 import (
@@ -9,10 +8,10 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"gosfv/internal/cli"
-	"gosfv/internal/gui"
-	"gosfv/internal/hexfmt"
-	"gosfv/internal/settings"
+	"github.com/lrweck/gosfv/internal/cli"
+	"github.com/lrweck/gosfv/internal/gui"
+	"github.com/lrweck/gosfv/internal/hexfmt"
+	"github.com/lrweck/gosfv/internal/settings"
 )
 
 const version = "1.0.0"

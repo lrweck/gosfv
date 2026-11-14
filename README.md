@@ -1,6 +1,6 @@
 # GoSFV
 
-**GoSFV** is a Go port of [SharpSFV](https://github.com/Wishwanderer/SharpSFV), the modern spiritual successor to QuickSFV. It creates and verifies checksum files, keeps the familiar color-coded list, and adds a native desktop UI written in Go with [MyGo](https://github.com/egoist/mygo) 0.9.0 — no web view, no JavaScript, no C# runtime.
+**GoSFV** is a fast checksum creator and verifier for Windows: `.sfv`, `.md5`, `.sha1`, `.sha256` and `.xxh3`, with a color-coded file list, a job queue for folders, and the same engine in a scriptable headless mode. The desktop UI is native Go with [MyGo](https://github.com/egoist/mygo) 0.9.0 — no web view, no JavaScript, no C# runtime.
 
 | Light | Dark |
 | --- | --- |
@@ -18,7 +18,7 @@
 - **Live progress:** throughput, ETA, per-file progress for files over 50 MiB, pause/resume and stop.
 - **Filtering:** instant name search, status filter, and duplicate detection by checksum.
 - **Bad-file tools:** move BAD/ERROR files into `_BAD_FILES`, rename them to `*.CORRUPT`, or generate `.bat` scripts to delete them or resolve duplicates.
-- **Portable settings:** `GoSFV.ini` beside the executable, compatible with SharpSFV's key names.
+- **Portable settings:** `GoSFV.ini` beside the executable; legacy key names from the original Windows tool are still read.
 - **Explorer integration:** right-click files or folders to create a checksum; checksum extensions open in GoSFV when they are not already associated with another application. Everything is registered under `HKCU`, so no elevation is needed.
 
 ## Checksum format
@@ -33,15 +33,15 @@ CBF43926 *file.bin     CRC-32 of "123456789"
 ```
 
 Reading also accepts the byte-reversed spelling (`2639F4CB *file.bin`). Old
-SharpSFV builds printed the raw bytes of .NET's `System.IO.Hashing.Crc32`,
-which are little-endian, and files created that way still exist. The verifier
-recognises them and reports the legacy order instead of marking the file BAD.
+.NET SFV tools printed the raw bytes of `System.IO.Hashing.Crc32`, which are
+little-endian, and files created that way still exist. The verifier recognises
+them and reports the legacy order instead of marking the file BAD.
 New files are never written reversed: the standard order is the only form every
 tool agrees on.
 
 ## Performance
 
-GoSFV is designed for throughput on the same disk as the .NET original, and the hot paths use SIMD and SWAR in every layer.
+GoSFV is designed for throughput on the disk where the files live, and the hot paths use SIMD and SWAR in every layer.
 
 ### Hashing
 
@@ -233,7 +233,8 @@ Time: 12 ms
 
 ## Configuration
 
-`GoSFV.ini` sits next to the executable. The keys overlap with `SharpSFV.ini`:
+`GoSFV.ini` sits next to the executable. The keys keep the names of the
+original Windows tool, so an existing INI can be copied over as `GoSFV.ini`:
 
 ```ini
 [GoSFV]
@@ -310,21 +311,25 @@ The tests cover known hash vectors, hex round trips (including fuzz), both check
 $env:GOSFV_PREVIEW_DIR = "$env:TEMP"; go test ./internal/gui -run TestRenderPreview
 ```
 
-## Differences from SharpSFV
+## Design notes
 
-GoSFV is a port, not a byte-for-byte reproduction of the WinForms application:
-
-- The UI is MyGo native, not WinForms; the layout and the theme follow the desktop.
-- Explorer registration uses `HKCU` only and does not self-copy the executable into `%LOCALAPPDATA%`.
+- The UI is MyGo native; the layout and the theme follow the desktop.
+- Explorer registration uses `HKCU` only and does not copy the executable into `%LOCALAPPDATA%`.
 - Windows taskbar progress and system sounds are not wired in; the in-window progress bar, throughput and colors replace them.
-- The GUI assumes flash when a disk refuses every hardware query; SharpSFV defaults to HDD. Override with **Options > Processing Mode**.
-- The batch scripts are Windows `.bat` files, as in the original.
+- When a disk refuses every hardware query, the GUI assumes flash. Force the mode with **Options > Processing Mode**.
+- The generated scripts are Windows `.bat` files.
 - Job mode keeps completed jobs until **Mode > Clear Completed Jobs**.
 
 ## License
 
-GoSFV is licensed under the **GNU General Public License v3.0**, like SharpSFV. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+GoSFV is licensed under the **GNU General Public License v3.0**. See
+[LICENSE](LICENSE) and [NOTICE](NOTICE).
 
-SharpSFV: Copyright the SharpSFV contributors, GPL-3.0.
+## Attribution
+
+GoSFV began as a Go reimplementation of SharpSFV
+(https://github.com/Wishwanderer/SharpSFV), GPL-3.0. See [NOTICE](NOTICE) for
+that attribution and for the third-party components.
+
 MyGo: MIT, https://github.com/egoist/mygo.
 xxh3: BSD-2-Clause, https://github.com/zeebo/xxh3.

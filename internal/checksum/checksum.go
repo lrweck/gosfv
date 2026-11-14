@@ -16,9 +16,9 @@ import (
 	"runtime"
 	"strings"
 
-	"gosfv/internal/hasher"
-	"gosfv/internal/hexfmt"
-	"gosfv/internal/model"
+	"github.com/lrweck/gosfv/internal/hasher"
+	"github.com/lrweck/gosfv/internal/hexfmt"
+	"github.com/lrweck/gosfv/internal/model"
 )
 
 // Entry is one parsed checksum line.
@@ -242,7 +242,7 @@ func writeBuffered(w *bufio.Writer, algo hasher.Kind, files []model.File, opt Wr
 		}
 		// filepath.ToSlash only on Windows would change stored paths;
 		// checksum files conventionally use the platform separator, as
-		// SharpSFV does.
+		// the tools that created the format do.
 		if _, err := w.WriteString(stored); err != nil {
 			return written, err
 		}

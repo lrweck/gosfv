@@ -1,8 +1,8 @@
 // Package settings persists GoSFV's INI file.
 //
-// The file is portable and lives beside the executable, as SharpSFV.ini did.
-// Keys keep the SharpSFV names where they overlap, so an existing file can be
-// copied over and keeps the user's preferences.
+// The file is portable and lives beside the executable. Keys keep the names
+// of the original Windows SFV tool where they overlap, so an existing INI can
+// be copied over and keeps the user's preferences.
 package settings
 
 import (
@@ -14,8 +14,8 @@ import (
 	"strconv"
 	"strings"
 
-	"gosfv/internal/drive"
-	"gosfv/internal/hasher"
+	"github.com/lrweck/gosfv/internal/drive"
+	"github.com/lrweck/gosfv/internal/hasher"
 )
 
 // PathMode is how checksum files store paths.

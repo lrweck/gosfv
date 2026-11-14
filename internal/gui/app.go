@@ -22,14 +22,14 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"gosfv/internal/checksum"
-	"gosfv/internal/drive"
-	"gosfv/internal/engine"
-	"gosfv/internal/hasher"
-	"gosfv/internal/model"
-	"gosfv/internal/runner"
-	"gosfv/internal/scanner"
-	"gosfv/internal/settings"
+	"github.com/lrweck/gosfv/internal/checksum"
+	"github.com/lrweck/gosfv/internal/drive"
+	"github.com/lrweck/gosfv/internal/engine"
+	"github.com/lrweck/gosfv/internal/hasher"
+	"github.com/lrweck/gosfv/internal/model"
+	"github.com/lrweck/gosfv/internal/runner"
+	"github.com/lrweck/gosfv/internal/scanner"
+	"github.com/lrweck/gosfv/internal/settings"
 )
 
 // Config is what main decided before the UI starts.

@@ -13,13 +13,13 @@ import (
 	"strings"
 	"time"
 
-	"gosfv/internal/checksum"
-	"gosfv/internal/drive"
-	"gosfv/internal/hasher"
-	"gosfv/internal/model"
-	"gosfv/internal/runner"
-	"gosfv/internal/scanner"
-	"gosfv/internal/settings"
+	"github.com/lrweck/gosfv/internal/checksum"
+	"github.com/lrweck/gosfv/internal/drive"
+	"github.com/lrweck/gosfv/internal/hasher"
+	"github.com/lrweck/gosfv/internal/model"
+	"github.com/lrweck/gosfv/internal/runner"
+	"github.com/lrweck/gosfv/internal/scanner"
+	"github.com/lrweck/gosfv/internal/settings"
 )
 
 // Options is a parsed command line.

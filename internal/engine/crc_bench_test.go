@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"testing"
 
-	"gosfv/internal/hasher"
+	"github.com/lrweck/gosfv/internal/hasher"
 )
 
 func benchCRCFile(b *testing.B, workers int) {

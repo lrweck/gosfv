@@ -1,4 +1,4 @@
-module gosfv
+module github.com/lrweck/gosfv
 
 go 1.27.3
 

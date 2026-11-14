@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"gosfv/internal/hasher"
-	"gosfv/internal/hexfmt"
-	"gosfv/internal/model"
+	"github.com/lrweck/gosfv/internal/hasher"
+	"github.com/lrweck/gosfv/internal/hexfmt"
+	"github.com/lrweck/gosfv/internal/model"
 )
 
 func TestParseHashFirst(t *testing.T) {
@@ -114,7 +114,7 @@ func TestWriteRoundTrip(t *testing.T) {
 // TestWriteCRC32StandardByteOrder pins the SFV convention: the eight
 // hexadecimal characters are the numeric CRC-32 value written most
 // significant nibble first. The byte-reversed form is a .NET hashing
-// implementation detail used by old SharpSFV builds, not the SFV format.
+// implementation detail used by old .NET SFV tools, not the SFV format.
 func TestWriteCRC32StandardByteOrder(t *testing.T) {
 	dir := t.TempDir()
 	var b bytes.Buffer

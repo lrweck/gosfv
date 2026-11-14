@@ -22,11 +22,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"gosfv/internal/hasher"
+	"github.com/lrweck/gosfv/internal/hasher"
 )
 
-// LargeFileThreshold is when per-file progress is reported, matching the
-// Active Jobs panel of SharpSFV.
+// LargeFileThreshold is when per-file progress is reported in the active
+// files panel.
 const LargeFileThreshold = 50 << 20
 
 // Task is one file to hash.

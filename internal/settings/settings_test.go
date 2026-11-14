@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"gosfv/internal/drive"
-	"gosfv/internal/hasher"
+	"github.com/lrweck/gosfv/internal/drive"
+	"github.com/lrweck/gosfv/internal/hasher"
 )
 
 func TestRoundTrip(t *testing.T) {
@@ -56,8 +56,8 @@ func TestRoundTrip(t *testing.T) {
 }
 
 func TestLegacyKeys(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "SharpSFV.ini")
-	data := "[SharpSFV]\nUseAbsolutePaths=1\nOptimizeForHDD=1\nDefaultAlgo=Crc32\nScanRecursive=0\n"
+	path := filepath.Join(t.TempDir(), "legacy.ini")
+	data := "[Legacy]\nUseAbsolutePaths=1\nOptimizeForHDD=1\nDefaultAlgo=Crc32\nScanRecursive=0\n"
 	if err := osWriteFile(path, data); err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestThemeKeys(t *testing.T) {
 	if got := Load(path).Theme; got != ThemeLight {
 		t.Errorf("Theme=Light -> %v", got)
 	}
-	// SharpSFV had no theme key; a boolean dark mode is still understood.
+	// The original INI had no theme key; a boolean dark mode is still understood.
 	if err := osWriteFile(path, "DarkMode=1\n"); err != nil {
 		t.Fatal(err)
 	}

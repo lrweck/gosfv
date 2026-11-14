@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"gosfv/internal/hasher"
-	"gosfv/internal/model"
-	"gosfv/internal/runner"
+	"github.com/lrweck/gosfv/internal/hasher"
+	"github.com/lrweck/gosfv/internal/model"
+	"github.com/lrweck/gosfv/internal/runner"
 )
 
 // applyResults copies the finished files of a tick into the list that the

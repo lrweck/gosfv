@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"gosfv/internal/model"
+	"github.com/lrweck/gosfv/internal/model"
 )
 
 func TestJobQueueState(t *testing.T) {

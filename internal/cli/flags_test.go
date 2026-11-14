@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"gosfv/internal/hasher"
-	"gosfv/internal/settings"
+	"github.com/lrweck/gosfv/internal/hasher"
+	"github.com/lrweck/gosfv/internal/settings"
 )
 
 func TestParseSingleDashLongFlags(t *testing.T) {
