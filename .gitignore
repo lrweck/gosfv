@@ -1,0 +1,8 @@
+GoSFV.exe
+GoSFV_simd.exe
+GoSFV.ini
+*.log
+_e2e/
+build/
+.mygo/
+dist/

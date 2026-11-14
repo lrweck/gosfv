@@ -1,0 +1,275 @@
+# GoSFV
+
+**GoSFV** is a Go port of [SharpSFV](https://github.com/Wishwanderer/SharpSFV), the modern spiritual successor to QuickSFV. It creates and verifies checksum files, keeps the familiar color-coded list, and adds a native desktop UI written in Go with [MyGo](https://github.com/egoist/mygo) 0.9.0 — no web view, no JavaScript, no C# runtime.
+
+![GoSFV verifying a checksum file](docs/screenshot.png)
+
+## Features
+
+- **Algorithms:** xxHash3-128 (default), CRC-32, MD5, SHA-1 and SHA-256.
+- **Checksum files:** `.sfv`, `.md5`, `.sha1`, `.sha256` and `.xxh3`.
+- **Both legacy syntaxes:** `HASH *filename` and CRC-32's `filename HASH`.
+- **Legacy SFV byte order:** CRC-32 written with the opposite endianness is recognized and reported, not marked BAD.
+- **Three UI modes:** the standard file list, a job queue that processes folder drops sequentially, and the compact "create checksum" window used by Explorer.
+- **Headless mode:** scriptable create and verify with progress and exit codes.
+- **Live progress:** throughput, ETA, per-file progress for files over 50 MiB, pause/resume and stop.
+- **Filtering:** instant name search, status filter, and duplicate detection by checksum.
+- **Bad-file tools:** move BAD/ERROR files into `_BAD_FILES`, rename them to `*.CORRUPT`, or generate `.bat` scripts to delete them or resolve duplicates.
+- **Portable settings:** `GoSFV.ini` beside the executable, compatible with SharpSFV's key names.
+- **Explorer integration:** right-click files or folders to create a checksum; checksum extensions open in GoSFV when they are not already associated with another application. Everything is registered under `HKCU`, so no elevation is needed.
+
+## Performance
+
+GoSFV is designed for throughput on the same disk as the .NET original, and the hot paths use SIMD and SWAR in every layer.
+
+### Hashing
+
+The hashers are the Go standard library and `zeebo/xxh3`, all of which are assembly/SIMD accelerated:
+
+| Algorithm | Backend |
+| --- | --- |
+| xxHash3-128 | `github.com/zeebo/xxh3`, AVX2/AVX-512 assembly |
+| CRC-32 (IEEE) | `hash/crc32`, PCLMULQDQ on amd64, CRC instructions on arm64 |
+| SHA-1 / SHA-256 | `crypto/sha1`, `crypto/sha256`, runtime block assembly including SHA-NI |
+| MD5 | `crypto/md5`, runtime block assembly |
+
+`go test -bench BenchmarkAlgorithms ./internal/hasher` on the development machine (Go 1.27, 8 MiB buffer):
+
+```text
+BenchmarkAlgorithms/XXHASH3   49707 MB/s   0 allocs/op
+BenchmarkAlgorithms/CRC32     31639 MB/s   0 allocs/op
+BenchmarkAlgorithms/SHA1       2290 MB/s   0 allocs/op
+BenchmarkAlgorithms/SHA256     2191 MB/s   0 allocs/op
+BenchmarkAlgorithms/MD5        1012 MB/s   0 allocs/op
+```
+
+CRC-32 on one 64 MiB file, cached, with the default worker count on a
+20-thread machine (`go test -bench BenchmarkCRC32 ./internal/engine`):
+
+```text
+BenchmarkCRC32OneWorker   5441 MB/s   1 worker
+BenchmarkCRC32AllCores    7582 MB/s   20 chunk workers, 1 file
+```
+
+The parallel CRC run does more than one core's work on one file and produces
+the same `.sfv` value; the limit is the read path, not the checksum.
+
+The end-to-end engine is I/O bound, so a real run is bounded by the disk, not the hash. On a cached 8 MiB file the xxHash3 path measures about 3.7 GB/s including open, read and result handling, with 11 allocations for the entire run.
+
+### Go 1.27 SIMD
+
+Go 1.27 added the experimental `simd` and `simd/archsimd` packages. GoSFV uses them for the hexadecimal codec that parsing and saving checksums spend time in:
+
+```powershell
+$env:GOEXPERIMENT = "simd"
+go build -o GoSFV.exe .
+# or:
+powershell -ExecutionPolicy Bypass -File build.ps1
+```
+
+With `GOEXPERIMENT=simd` and AVX2, `simd/archsimd` converts 16 input bytes to 32 hex characters per iteration, and decodes 16 characters to 8 bytes per iteration. Eight-character SFV CRC-32 hashes go through a SWAR path that extracts and validates all eight nibbles in one `uint64`, then packs four bytes. Without the experiment, a table-driven codec handles the blocks; the SWAR path is always available. The hash algorithms use SIMD assembly either way.
+
+### Scheduling: one file per core, and one file on all cores when the algorithm allows it
+
+- The normal pool creates `runtime.GOMAXPROCS(0)` workers (unless HDD/network mode forces one). Each worker hashes **one file at a time**. With 100 files and 20 cores, 20 files are in flight; with 4 files and 20 cores, 4 files are in flight.
+- When there are **fewer files than cores** and the algorithm is **CRC-32**, GoSFV splits each file into chunks of at least 1 MiB and hashes the chunks on all workers. The block CRCs are combined with the same GF(2) matrix algorithm zlib uses (`crc32_combine`), so the resulting `.sfv` is exactly what a single-threaded tool would produce. One 20 GiB `.sfv` verification can use every core.
+- MD5, SHA-1, SHA-256 and xxHash3 are **sequential digests**. There is no way to split one file's bytes among N cores and combine the pieces into the standard digest; doing so would produce a checksum no other tool recognizes. For those algorithms a single file uses one core, and extra cores are intentionally idle rather than producing an incompatible hash. Multiple files still use one core each.
+
+This is the honest limit of standard checksum formats. The GUI and CLI both follow it.
+
+### Idiomatic Go interfaces
+
+- `hasher.Kind.New() hash.Hash`: the engine hashes through the standard `hash.Hash` interface, which embeds `io.Writer`. Any implementation can be plugged in.
+- `internal/fio.File` implements `io.Reader` and `io.ReaderAt`; the CRC chunk path uses `io.ReaderAt` so chunks never share a file pointer.
+- `checksum.ParseFile` opens an `io.Reader` and calls `checksum.ParseReader`; `checksum.WriteFile` calls `checksum.WriteTo(io.Writer, ...)`. The parser, writer and CLI compose with files, pipes and buffers without special cases.
+- Optional behavior is a consumer-owned interface: `engine.Options` takes callbacks, `runner.Options` takes the same progress/files hooks, and the UI and CLI are two adapters over the same runner.
+
+(Go 1.27 does not add a `hash.Hasher`; `hash.Hash` remains the standard interface. `hash/maphash.Hasher[T]` is the generic helper for map seeds, not file digests.)
+
+### Allocation discipline
+
+- One hasher and one read buffer per worker, reused for every file.
+- One atomic increment per file hands out work; there is no channel per file.
+- Results live in a preallocated slice; finished work is published with an atomic flag.
+- Digests are written into a single result arena. The UI and the CLI keep slices into that arena instead of allocating a byte slice per file.
+- The checksum parser decodes all hashes into one arena and allocates only the filename strings the list needs.
+- UI updates are batched at 100 ms; the table is virtualized by MyGo and builds only the visible rows.
+
+### Scanning and I/O
+
+- On Windows, directories are enumerated with `FindFirstFile`/`FindNextFile`, which returns attributes and file size in the directory listing. This avoids an extra stat per file and skips hidden, system and reparse entries without opening them.
+- Files are opened with `CreateFile` and read with `ReadFile` directly (`internal/fio`), avoiding `os.File`'s finalizer and poller setup. `FILE_FLAG_SEQUENTIAL_SCAN` enables read-ahead.
+- The engine uses one sequential reader (8 MiB buffer) for a mechanical disk or network share, and one reader per `GOMAXPROCS` worker (about 1 MiB each) for flash.
+- Drive type comes from `IOCTL_STORAGE_QUERY_PROPERTY` on the volume, then the physical disk when BitLocker or RAID hides the volume, then the device product name. A device that refuses every query is treated as flash; `Options > Processing Mode` overrides this.
+
+## Build
+
+Requirements: Go 1.27.3 or newer. The `go` command downloads the toolchain `go.mod` asks for when the installed one is older.
+
+```powershell
+go build -o GoSFV.exe .
+```
+
+With the experimental SIMD codec:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File build.ps1
+```
+
+Packaged app with MyGo (the CLI is pinned as a tool in `go.mod`):
+
+```powershell
+$env:GOEXPERIMENT = "simd"
+go tool mygo build
+# build/windows-amd64/GoSFV.exe and gosfv-setup-1.0.0-amd64.exe
+```
+
+Without `GOEXPERIMENT=simd`, the packaged app uses the portable hex codec; the
+hash algorithms still use their assembly/SIMD implementations.
+
+## Usage
+
+### GUI
+
+- Drop files or folders to create checksums.
+- Drop a single checksum file to verify it.
+- Switch to **Mode > Job Queue Mode** and drop folders; each folder becomes a job whose checksum file is written beside it.
+- Select rows for copy, rename, delete, or moving bad files.
+- Use **Options > System Integration** to add or remove Explorer entries.
+
+### Command line
+
+```text
+GoSFV.exe -headless <checksum-file>
+GoSFV.exe -headless -create <files-or-folders>
+GoSFV.exe -headless -create -algo sha256 -o digests.sha256 C:\Builds
+GoSFV.exe -create -o checksums.sfv C:\Backups\2026
+```
+
+Options:
+
+| Option | Meaning |
+| --- | --- |
+| `-create` | Create checksums. Without `-headless`, opens the compact create window. |
+| `-headless` | No window; print a progress bar on stderr and a summary on stdout. |
+| `-quiet` | No progress bar (the summary is still printed). |
+| `-algo NAME` | `xxh3`, `crc32`, `md5`, `sha1` or `sha256`. |
+| `-o PATH` | Output checksum file. |
+| `-ini PATH` | Configuration file. |
+| `-version` | Print the version. |
+| `-h`, `--help` | Usage. |
+
+Exit codes: `0` when every file is OK, `1` when anything is BAD, MISSING or ERROR (or the run was stopped), `2` for usage or setup errors.
+
+The terminal UI is built with
+[`schollz/progressbar/v3`](https://github.com/schollz/progressbar/v3): a spinner
+while scanning, then bytes, throughput, elapsed time and ETA. Progress goes to
+stderr, so redirecting stdout keeps the summary clean. When stderr is not a
+terminal, or with `-quiet`, the bar is omitted.
+
+Example:
+
+```text
+> GoSFV.exe -headless C:\LinuxDistros\ubuntu.sha256
+Verifying C:\LinuxDistros\ubuntu.sha256 (SHA-256, SSD/Parallel)
+------------------------------------------------
+Total: 4
+OK: 4
+BAD: 0
+MISSING: 0
+ERROR: 0
+Time: 12 ms
+------------------------------------------------
+```
+
+## Configuration
+
+`GoSFV.ini` sits next to the executable. The keys overlap with `SharpSFV.ini`:
+
+```ini
+[GoSFV]
+TimeTab=0
+ShowThroughputStats=0
+ShowFilterPanel=0
+ShowAdvancedBar=0
+ShowFullPaths=0
+ShowHashCol=1
+ShowExpectedHashCol=1
+LockColumns=1
+PathStorageMode=Relative
+ProcessingMode=Auto
+EnableChecksumComments=0
+PathPrefix=
+IncludePattern=
+ExcludePattern=
+ScanRecursive=1
+Signature=L33T
+DefaultAlgo=XXHASH3
+ColumnOrder=Name:0,Hash:1,Status:2
+ColumnWidths=Name:300,Hash:430,Status:90
+```
+
+`ProcessingMode` accepts `Auto`, `HDD` (one reader) and `SSD` (parallel). `PathStorageMode` accepts `Relative` and `Absolute`. The legacy `UseAbsolutePaths` and `OptimizeForHDD` keys are still read.
+
+## How it is organized
+
+```text
+main.go                 flags, GUI/headless dispatch
+internal/
+  hasher/               algorithm names, hashers, benchmarks
+  hexfmt/               SIMD (Go 1.27) and portable hex codecs
+  checksum/             parser, writer, endian-aware verification helpers
+  scanner/              Win32 directory walker, filters, common base, wildcard matching
+  fio/                  CreateFile/ReadFile on Windows, os.File elsewhere
+  engine/               worker pool, pause gate, progress, result arena
+  runner/               scan -> hash -> status pipeline used by GUI and CLI
+  model/                File, Job and status types
+  settings/             portable INI
+  drive/                HDD/SSD detection
+  badtools/             move/rename and .bat generators
+  shell/                Explorer registry integration
+  cli/                  headless mode
+  gui/                  MyGo state, view, menus, actions and job queue
+```
+
+The flow is:
+
+```text
+drop / open / CLI
+  -> runner scans or parses
+  -> files handed to the UI (and tasks built)
+  -> engine hashes with N reusable workers
+  -> results published atomically
+  -> UI applies batches on the main thread every 100 ms
+  -> save / verify report
+```
+
+The GUI and the CLI share the runner, so status rules, CRC endianness and progress counts cannot drift.
+
+## Tests
+
+```powershell
+go test ./...
+$env:GOEXPERIMENT = "simd"; go test ./...
+```
+
+The tests cover known hash vectors, hex round trips (including fuzz), both checksum syntaxes, legacy CRC endianness, parser allocation bounds, the Win32/generic scanner behavior, filtering, engine cancellation and progress, the runner, settings compatibility and the view itself with `ui.Tester`.
+
+## Differences from SharpSFV
+
+GoSFV is a port, not a byte-for-byte reproduction of the WinForms application:
+
+- The UI is MyGo native, not WinForms; the layout and the theme follow the desktop.
+- Explorer registration uses `HKCU` only and does not self-copy the executable into `%LOCALAPPDATA%`.
+- Windows taskbar progress and system sounds are not wired in; the in-window progress bar, throughput and colors replace them.
+- The GUI assumes flash when a disk refuses every hardware query; SharpSFV defaults to HDD. Override with **Options > Processing Mode**.
+- The batch scripts are Windows `.bat` files, as in the original.
+- Job mode keeps completed jobs until **Mode > Clear Completed Jobs**.
+
+## License
+
+GoSFV is licensed under the **GNU General Public License v3.0**, like SharpSFV. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+SharpSFV: Copyright the SharpSFV contributors, GPL-3.0.
+MyGo: MIT, https://github.com/egoist/mygo.
+xxh3: BSD-2-Clause, https://github.com/zeebo/xxh3.

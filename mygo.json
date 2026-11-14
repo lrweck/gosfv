@@ -1,0 +1,6 @@
+{
+  "name": "GoSFV",
+  "identifier": "dev.gosfv.app",
+  "version": "1.0.0",
+  "out": "build"
+}
