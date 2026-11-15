@@ -328,6 +328,8 @@ func (a *App) fileTable(c *ui.Context) {
 		return
 	}
 	card.Children(func() {
+		selBefore := a.selection.Len()
+		activeBefore := a.activeRow
 		tbl := ui.Table(c, &a.list, a.cols, len(a.viewRows), func(row, col int) {
 			a.fileCell(c, row, col)
 		}).Grow(1)
@@ -345,10 +347,15 @@ func (a *App) fileTable(c *ui.Context) {
 			}
 			c.Invalidate()
 		}
-		// A press on the table but not on any row clears the choice. A row
-		// click sets rowClicked through RowClicked in fileCell, and a
-		// header, resize or sort sets changed.
-		if tbl.PressedInside() && !a.rowClicked && !changed {
+		// A press on the table but not on a row clears the choice. A row
+		// click sets rowClicked through RowClicked in fileCell, but that
+		// reports only clicks without modifiers, and a Ctrl- or Shift-click
+		// toggles or extends the choice on release: clearing here would
+		// empty the selection before it does. Leave modified presses to the
+		// table.
+		if tbl.PressedInside() && !a.rowClicked && !changed &&
+			c.Modifiers()&(ui.Cmd|ui.Shift) == 0 &&
+			a.selection.Len() == selBefore && a.activeRow == activeBefore {
 			a.selection.Clear()
 			a.activeRow = -1
 			a.selDirty = true
@@ -375,7 +382,7 @@ func (a *App) fileCell(c *ui.Context, row, col int) {
 		textColor = t.AccentText
 		mutedColor = t.AccentText
 	}
-	cell := ui.Row(c).FillWidth()
+	cell := ui.Box(c).FillWidth()
 	if cell.RowClicked() {
 		a.rowClicked = true
 	}

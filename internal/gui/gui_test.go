@@ -774,6 +774,45 @@ func TestSelectedIndices(t *testing.T) {
 	}
 }
 
+func TestCtrlClickExtendsTheSelection(t *testing.T) {
+	a := testApp()
+	tt := ui.NewTester(a.view, 1200, 720)
+	if err := tt.Click("a.bin"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ClickWith(ui.Cmd, "b.bin"); err != nil {
+		t.Fatal(err)
+	}
+	if a.selection.Len() != 2 {
+		t.Fatalf("Ctrl-click selection = %d, want 2", a.selection.Len())
+	}
+	if !a.selection.Has(a.store[0].ID) || !a.selection.Has(a.store[1].ID) {
+		t.Errorf("selection lost a row: %v", a.selection.All())
+	}
+	// Ctrl-clicking a chosen row takes it out.
+	if err := tt.ClickWith(ui.Cmd, "a.bin"); err != nil {
+		t.Fatal(err)
+	}
+	if a.selection.Len() != 1 || !a.selection.Has(a.store[1].ID) {
+		t.Errorf("after toggling off: %v", a.selection.All())
+	}
+}
+
+func TestShiftClickExtendsTheSelection(t *testing.T) {
+	a := testApp()
+	tt := ui.NewTester(a.view, 1200, 720)
+	if err := tt.Click("a.bin"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	if err := tt.ClickWith(ui.Shift, "c.bin"); err != nil {
+		t.Fatal(err)
+	}
+	if a.selection.Len() != 3 {
+		t.Fatalf("Shift-click selection = %d, want 3", a.selection.Len())
+	}
+}
+
 func TestClickOutsideDeselects(t *testing.T) {
 	a := testApp()
 	tt := ui.NewTester(a.view, 1200, 720)

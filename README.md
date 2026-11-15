@@ -217,7 +217,7 @@ Packaged app with MyGo (the CLI is pinned as a tool in `go.mod`):
 
 ```powershell
 go tool mygo build
-# build/windows-amd64/GoSFV.exe and gosfv-setup-1.1.10-amd64.exe
+# build/windows-amd64/GoSFV.exe and gosfv-setup-1.1.11-amd64.exe
 ```
 
 ## Usage
@@ -228,7 +228,7 @@ go tool mygo build
 - The header keeps search, the **Files / Jobs** switch and the primary actions; the counts below it are color-coded chips.
 - Click a row to open its details in the sidebar; select several for a summary. Hide it with **View > Show Details Sidebar**.
 - Switch to **Mode > Job Queue Mode** and drop folders; each folder becomes a job whose checksum file is written beside it.
-- Select rows for copy, rename, delete, or moving bad files.
+- Select rows for copy, rename, delete, or moving bad files. **Ctrl-click** adds or removes a row, **Shift-click** extends from the last chosen row, and **Ctrl+A** selects all; clicking the empty space below the rows clears the selection.
 - Pick **View > Appearance** (or the Theme selector) to follow the system, or force light or dark.
 - The **Size** column shows each file's size and **Progress** shows its live percentage while it is being hashed; the bar at the bottom is the whole run.
 - The same overall progress appears on the taskbar (Windows), Dock (macOS) or launcher (Linux).

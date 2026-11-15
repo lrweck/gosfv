@@ -14,7 +14,7 @@ import (
 	"github.com/lrweck/gosfv/internal/settings"
 )
 
-const version = "1.1.10"
+const version = "1.1.11"
 
 func main() {
 	flags, err := cli.Parse(os.Args[1:])
