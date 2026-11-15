@@ -1035,9 +1035,10 @@ func (a *App) startRecheck(indices []int) {
 	}
 	seq := drive.Sequential(a.settings.ProcMode, drive.Detect(base))
 	opt := runner.Options{
-		Algo:       a.algo,
-		Sequential: seq,
-		Gate:       a.gate,
+		Algo:           a.algo,
+		Sequential:     seq,
+		Gate:           a.gate,
+		OnFileProgress: a.onFileProgress,
 		OnTick: func(p runner.Progress, done []runner.Completed) {
 			mygo.RunOnMain(func() { a.applyTick(p, done) })
 			a.invalidate()

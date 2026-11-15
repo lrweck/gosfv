@@ -221,6 +221,15 @@ func Recheck(ctx context.Context, files []model.File, indices []int, opt Options
 			inner(p, done)
 		}
 	}
+	innerProgress := opt.OnFileProgress
+	if innerProgress != nil {
+		opt.OnFileProgress = func(index int32, path string, done, total int64) {
+			if index < 0 || int(index) >= len(orig) {
+				return
+			}
+			innerProgress(int32(orig[index]), path, done, total)
+		}
+	}
 	opt.OnFiles = nil
 	return run(ctx, subset, opt, start, true, "", nil)
 }

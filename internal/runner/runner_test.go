@@ -196,6 +196,35 @@ func TestRecheck(t *testing.T) {
 	}
 }
 
+func TestRecheckProgressIndex(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "a.bin"), []byte("small"))
+	data := make([]byte, 60<<20)
+	write(t, filepath.Join(dir, "b.bin"), data)
+	files := []model.File{
+		{ID: 1, Name: "a.bin", Rel: "a.bin", Dir: dir, Status: model.OK, Expected: md5sum([]byte("small"))},
+		{ID: 2, Name: "b.bin", Rel: "b.bin", Dir: dir, Status: model.OK, Expected: md5sum(nil)},
+	}
+	var seen []int32
+	opt := Options{
+		Algo: hasher.MD5,
+		OnFileProgress: func(index int32, path string, done, total int64) {
+			seen = append(seen, index)
+		},
+	}
+	if _, err := Recheck(context.Background(), files, []int{1}, opt); err != nil {
+		t.Fatal(err)
+	}
+	if len(seen) == 0 {
+		t.Fatal("no per-file progress was reported")
+	}
+	for _, i := range seen {
+		if i != 1 {
+			t.Fatalf("progress index = %d, want the original 1", i)
+		}
+	}
+}
+
 func TestRecheckMissing(t *testing.T) {
 	dir := t.TempDir()
 	a := filepath.Join(dir, "a.bin")
