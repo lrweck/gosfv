@@ -4,6 +4,53 @@ package hexfmt
 
 import "simd/archsimd"
 
+// The vector constants are built once, after the CPU check. Building them
+// inside each call cost more than the table loop on short hashes, because a
+// 32-character MD5 is only two vectors; once cached they are a register load.
+var (
+	simdReady bool
+
+	encMask0f    archsimd.Uint16x8
+	encASCIIBase archsimd.Uint16x8
+	encSeven     archsimd.Uint16x8
+	encZero      archsimd.Uint16x8
+	encNine      archsimd.Uint16x8
+
+	decZero     archsimd.Uint8x16
+	decNine     archsimd.Uint8x16
+	decLowerBit archsimd.Uint8x16
+	decDigit0   archsimd.Uint8x16
+	decDigit9   archsimd.Uint8x16
+	decAlpha    archsimd.Uint8x16
+	decAlphaf   archsimd.Uint8x16
+	decMask0f   archsimd.Uint8x16
+	decMaskFF   archsimd.Uint16x8
+	decMaskF    archsimd.Uint16x8
+)
+
+func init() {
+	if !archsimd.X86.AVX() {
+		return
+	}
+	simdReady = true
+	encMask0f = archsimd.BroadcastUint16x8(0x000f)
+	encASCIIBase = archsimd.BroadcastUint16x8(0x30)
+	encSeven = archsimd.BroadcastUint16x8(7)
+	encZero = archsimd.BroadcastUint16x8(0)
+	encNine = archsimd.BroadcastUint16x8(9)
+
+	decZero = archsimd.BroadcastUint8x16(0)
+	decNine = archsimd.BroadcastUint8x16(9)
+	decLowerBit = archsimd.BroadcastUint8x16(0x20)
+	decDigit0 = archsimd.BroadcastUint8x16('0')
+	decDigit9 = archsimd.BroadcastUint8x16('9')
+	decAlpha = archsimd.BroadcastUint8x16('a')
+	decAlphaf = archsimd.BroadcastUint8x16('f')
+	decMask0f = archsimd.BroadcastUint8x16(0x0f)
+	decMaskFF = archsimd.BroadcastUint16x8(0x00ff)
+	decMaskF = archsimd.BroadcastUint16x8(0x000f)
+}
+
 // encodeUpperSIMD encodes 16-byte blocks with AVX/AVX-512 and returns how many
 // source bytes it handled. The caller finishes any tail with the table code.
 //
@@ -11,14 +58,9 @@ import "simd/archsimd"
 // high nibble in 16-bit lanes, converts both to ASCII with arithmetic, packs
 // them back into bytes, and interleaves the pairs from neighbouring lanes.
 func encodeUpperSIMD(dst, src []byte) int {
-	if len(src) < 16 || !archsimd.X86.AVX() {
+	if len(src) < 16 || !simdReady {
 		return 0
 	}
-	mask0f := archsimd.BroadcastUint16x8(0x000f)
-	asciiBase := archsimd.BroadcastUint16x8(0x30)
-	seven := archsimd.BroadcastUint16x8(7)
-	zero := archsimd.BroadcastUint16x8(0)
-	nine := archsimd.BroadcastUint16x8(9)
 
 	i := 0
 	for ; i+16 <= len(src); i += 16 {
@@ -26,14 +68,14 @@ func encodeUpperSIMD(dst, src []byte) int {
 		w := x.AsUint16x8()
 		// A 16-bit lane holds byte0 in its low half and byte1 in its high
 		// half (little endian).
-		a := w.And(mask0f)                   // low nibble of byte0
-		b := w.ShiftAllRight(4).And(mask0f)  // high nibble of byte0
-		c := w.ShiftAllRight(8).And(mask0f)  // low nibble of byte1
-		d := w.ShiftAllRight(12).And(mask0f) // high nibble of byte1
-		a = asciiBase.Add(seven.IfElse(a.Greater(nine), zero)).Add(a)
-		b = asciiBase.Add(seven.IfElse(b.Greater(nine), zero)).Add(b)
-		c = asciiBase.Add(seven.IfElse(c.Greater(nine), zero)).Add(c)
-		d = asciiBase.Add(seven.IfElse(d.Greater(nine), zero)).Add(d)
+		a := w.And(encMask0f)                   // low nibble of byte0
+		b := w.ShiftAllRight(4).And(encMask0f)  // high nibble of byte0
+		c := w.ShiftAllRight(8).And(encMask0f)  // low nibble of byte1
+		d := w.ShiftAllRight(12).And(encMask0f) // high nibble of byte1
+		a = encASCIIBase.Add(encSeven.IfElse(a.Greater(encNine), encZero)).Add(a)
+		b = encASCIIBase.Add(encSeven.IfElse(b.Greater(encNine), encZero)).Add(b)
+		c = encASCIIBase.Add(encSeven.IfElse(c.Greater(encNine), encZero)).Add(c)
+		d = encASCIIBase.Add(encSeven.IfElse(d.Greater(encNine), encZero)).Add(d)
 		// The high nibble's character comes first: the little-endian
 		// store writes b (high nibble) then a (low nibble) for byte0.
 		w0 := a.ShiftAllLeft(8).Or(b)
@@ -47,35 +89,25 @@ func encodeUpperSIMD(dst, src []byte) int {
 // decodeSIMD decodes 16-character blocks. It reports how many source characters
 // it consumed and whether they were all valid hexadecimal.
 func decodeSIMD(dst, src []byte) (int, bool) {
-	if len(src) < 16 || !archsimd.X86.AVX() {
+	if len(src) < 16 || !simdReady {
 		return 0, true
 	}
-	zeroU8 := archsimd.BroadcastUint8x16(0)
-	nineU8 := archsimd.BroadcastUint8x16(9)
-	lowerBit := archsimd.BroadcastUint8x16(0x20)
-	digit0 := archsimd.BroadcastUint8x16('0')
-	digit9 := archsimd.BroadcastUint8x16('9')
-	alpha := archsimd.BroadcastUint8x16('a')
-	alphaf := archsimd.BroadcastUint8x16('f')
-	mask0f := archsimd.BroadcastUint8x16(0x0f)
-	maskff := archsimd.BroadcastUint16x8(0x00ff)
-	maskf := archsimd.BroadcastUint16x8(0x000f)
 
 	i, out := 0, 0
 	var tmp [16]byte
 	for ; i+16 <= len(src); i += 16 {
 		v := archsimd.LoadUint8x16(src[i : i+16])
-		lower := v.Or(lowerBit)
-		digits := v.GreaterEqual(digit0).And(v.LessEqual(digit9))
-		letters := lower.GreaterEqual(alpha).And(lower.LessEqual(alphaf))
+		lower := v.Or(decLowerBit)
+		digits := v.GreaterEqual(decDigit0).And(v.LessEqual(decDigit9))
+		letters := lower.GreaterEqual(decAlpha).And(lower.LessEqual(decAlphaf))
 		if digits.Or(letters).ToBits() != 0xffff {
 			return i, false
 		}
-		nib := v.And(mask0f)
+		nib := v.And(decMask0f)
 		// 'a'..'f' have a low nibble of 1..6; adding 9 makes it 10..15.
-		nib = nib.Add(nineU8.IfElse(letters, zeroU8))
+		nib = nib.Add(decNine.IfElse(letters, decZero))
 		w := nib.AsUint16x8()
-		packed := w.And(maskff).ShiftAllLeft(4).Or(w.ShiftAllRight(8).And(maskf))
+		packed := w.And(decMaskFF).ShiftAllLeft(4).Or(w.ShiftAllRight(8).And(decMaskF))
 		// Compacting the low byte of each 16-bit lane would need AVX-512's
 		// VPMOVWB. Store the lanes and copy the low bytes instead, which
 		// keeps this path usable on AVX2 machines.
