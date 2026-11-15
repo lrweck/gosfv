@@ -188,6 +188,11 @@ func (a *App) statusBar(c *ui.Context) {
 					a.recheckAll()
 				}
 			}
+			if a.stats.Bad+a.stats.Missing+a.stats.Error > 0 {
+				if ui.Button(c, "Recheck Failed").Tooltip("Recheck only BAD, MISSING and ERROR rows").Clicked() {
+					a.recheckFailed()
+				}
+			}
 		}
 		if a.processing {
 			label := "Pause"

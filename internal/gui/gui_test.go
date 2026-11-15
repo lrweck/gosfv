@@ -134,15 +134,15 @@ func TestLiveSortByProgress(t *testing.T) {
 	a.active[0] = activeFile{Name: "a.bin", Done: 25, Total: 100}
 	a.mu.Unlock()
 	a.liveSort(0)
-	// a is being worked on, b finished, c has no value.
-	if got := []string{a.store[a.viewRows[0]].Name, a.store[a.viewRows[1]].Name, a.store[a.viewRows[2]].Name}; got[0] != "a.bin" || got[1] != "b.bin" || got[2] != "c.bin" {
+	// Ascending by fraction: c (no value), a (25%), b (finished).
+	if got := []string{a.store[a.viewRows[0]].Name, a.store[a.viewRows[1]].Name, a.store[a.viewRows[2]].Name}; got[0] != "c.bin" || got[1] != "a.bin" || got[2] != "b.bin" {
 		t.Errorf("first live sort = %v", got)
 	}
-	if a.activeRow != 0 {
-		t.Errorf("active row = %d, want 0", a.activeRow)
+	if a.activeRow != 1 {
+		t.Errorf("active row = %d, want 1", a.activeRow)
 	}
 
-	// c.bin joins the active group and stays after a.bin while ascending.
+	// c.bin moves ahead of a.bin as its own progress rises.
 	a.mu.Lock()
 	a.active[2] = activeFile{Name: "c.bin", Done: 50, Total: 100}
 	a.mu.Unlock()
@@ -165,15 +165,33 @@ func TestSortByProgress(t *testing.T) {
 	a.sort = ui.SortOrder{Column: "Progress"}
 	a.applyView()
 	got := []string{a.store[a.viewRows[0]].Name, a.store[a.viewRows[1]].Name, a.store[a.viewRows[2]].Name}
-	// Active files first (25, 50), then the completed one.
+	// a 25%, c 50%, b finished.
 	if got[0] != "a.bin" || got[1] != "c.bin" || got[2] != "b.bin" {
 		t.Errorf("ascending = %v", got)
 	}
 	a.sort.Descending = true
 	a.applyView()
 	got = []string{a.store[a.viewRows[0]].Name, a.store[a.viewRows[1]].Name, a.store[a.viewRows[2]].Name}
-	// The active group stays first; only its order flips.
-	if got[0] != "c.bin" || got[1] != "a.bin" || got[2] != "b.bin" {
+	if got[0] != "b.bin" || got[1] != "c.bin" || got[2] != "a.bin" {
+		t.Errorf("descending = %v", got)
+	}
+}
+
+func TestSortByStatusPutsProcessingFirst(t *testing.T) {
+	a := testApp() // a OK, b BAD, c MISSING
+	a.mu.Lock()
+	a.active[0] = activeFile{Name: "a.bin", Done: 25, Total: 100}
+	a.mu.Unlock()
+	a.sort = ui.SortOrder{Column: "Status"}
+	a.applyView()
+	got := []string{a.store[a.viewRows[0]].Name, a.store[a.viewRows[1]].Name, a.store[a.viewRows[2]].Name}
+	if got[0] != "a.bin" || got[1] != "b.bin" || got[2] != "c.bin" {
+		t.Errorf("ascending = %v", got)
+	}
+	a.sort.Descending = true
+	a.applyView()
+	got = []string{a.store[a.viewRows[0]].Name, a.store[a.viewRows[1]].Name, a.store[a.viewRows[2]].Name}
+	if got[0] != "c.bin" || got[1] != "b.bin" || got[2] != "a.bin" {
 		t.Errorf("descending = %v", got)
 	}
 }
@@ -231,6 +249,23 @@ func TestFooterState(t *testing.T) {
 	a.stats = runner.Progress{Total: 2, Done: 2}
 	if got := a.footerState(); got != "Done" {
 		t.Errorf("done = %q", got)
+	}
+}
+
+func TestRecheckButtonIncludesErrorRows(t *testing.T) {
+	a := filesApp()
+	a.selection.Clear()
+	a.store[1].Status = model.Error
+	a.store[1].Hash = nil
+	tt := ui.NewTester(a.view, 1200, 720)
+	if err := tt.Click("Recheck All"); err != nil {
+		t.Fatal(err)
+	}
+	if !a.processing || !a.rechecking {
+		t.Fatalf("recheck did not start: processing=%v rechecking=%v", a.processing, a.rechecking)
+	}
+	if a.store[1].Status != model.Pending {
+		t.Errorf("ERROR row was not queued for recheck: %v", a.store[1].Status)
 	}
 }
 

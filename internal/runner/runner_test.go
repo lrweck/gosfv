@@ -259,6 +259,26 @@ func TestRecheckMissing(t *testing.T) {
 	}
 }
 
+func TestRecheckErrorStatus(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "a.bin"), []byte("alpha"))
+	files := []model.File{{
+		ID: 1, Name: "a.bin", Rel: "a.bin", Dir: dir,
+		Status: model.Error, Expected: md5sum([]byte("alpha")),
+	}}
+	c := newCapture()
+	rep, err := Recheck(context.Background(), files, nil, c.opts(hasher.MD5))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Progress.OK != 1 || rep.Progress.Error != 0 {
+		t.Errorf("progress = %+v", rep.Progress)
+	}
+	if c.done[0] != model.OK {
+		t.Errorf("status = %v, want OK", c.done[0])
+	}
+}
+
 func TestStatFiles(t *testing.T) {
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "a.bin"), []byte("1234"))

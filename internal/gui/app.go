@@ -463,7 +463,7 @@ func (a *App) sortView(view []int) {
 	}
 	desc := a.sort.Descending
 	var progress map[int32]activeFile
-	if col == "Progress" {
+	if col == "Progress" || col == "Status" {
 		progress = a.progressSnapshot()
 	}
 	slices.SortFunc(view, func(i, j int) int {
@@ -479,7 +479,17 @@ func (a *App) sortView(view []int) {
 		case "Hash":
 			c = compareBytes(fi.Hash, fj.Hash)
 		case "Status":
-			c = int(fi.Status) - int(fj.Status)
+			ri := int(fi.Status)
+			rj := int(fj.Status)
+			// A row being hashed sorts before every waiting or finished
+			// state, so Status puts what is in progress together.
+			if _, ok := progress[int32(i)]; ok {
+				ri = -1
+			}
+			if _, ok := progress[int32(j)]; ok {
+				rj = -1
+			}
+			c = ri - rj
 		case "Size":
 			if fi.Size < fj.Size {
 				c = -1
@@ -487,22 +497,12 @@ func (a *App) sortView(view []int) {
 				c = 1
 			}
 		case "Progress":
-			gi, pi := progressOrder(fi, i, progress)
-			gj, pj := progressOrder(fj, j, progress)
-			switch {
-			case gi != gj:
-				// Active files first, then the completed ones, then the
-				// rows with no value, whatever the direction.
-				c = gi - gj
-			case gi == 0:
-				if pi < pj {
-					c = -1
-				} else if pi > pj {
-					c = 1
-				}
-				if desc {
-					c = -c
-				}
+			pi := fileFraction(fi, i, progress)
+			pj := fileFraction(fj, j, progress)
+			if pi < pj {
+				c = -1
+			} else if pi > pj {
+				c = 1
 			}
 		case "Expected":
 			c = compareBytes(fi.Expected, fj.Expected)
@@ -521,9 +521,7 @@ func (a *App) sortView(view []int) {
 				c = 1
 			}
 		}
-		// Progress already applied the direction inside the active group;
-		// its group order stays the same in both directions.
-		if desc && col != "Progress" {
+		if desc {
 			return -c
 		}
 		return c
@@ -545,25 +543,24 @@ func (a *App) progressSnapshot() map[int32]activeFile {
 	return m
 }
 
-// progressOrder groups a row for the Progress sort: 0 is a file being
-// hashed now, 1 finished OK/BAD, 2 has no value (queued, missing, error).
-// The fraction orders files inside group 0.
-func progressOrder(f model.File, idx int, active map[int32]activeFile) (int, float64) {
+// fileFraction is the value the Progress column sorts on: the live fraction
+// while a file is hashed, 1 when it finished OK/BAD, else 0.
+func fileFraction(f model.File, idx int, active map[int32]activeFile) float64 {
 	if p, ok := active[int32(idx)]; ok && p.Total > 0 {
 		frac := float64(p.Done) / float64(p.Total)
 		if frac < 0 {
-			frac = 0
+			return 0
 		}
 		if frac > 1 {
-			frac = 1
+			return 1
 		}
-		return 0, frac
+		return frac
 	}
 	switch f.Status {
 	case model.OK, model.Bad:
-		return 1, 1
+		return 1
 	}
-	return 2, 0
+	return 0
 }
 
 func (a *App) duplicates() [][]int {
@@ -743,9 +740,9 @@ func (a *App) liveSort(done int) {
 		return
 	}
 	switch col {
-	case "Progress":
-		// The active fractions move between ticks.
-	case "Status", "Time", "Hash", "Size":
+	case "Progress", "Status":
+		// The active fractions and the PROCESSING state move between ticks.
+	case "Time", "Hash", "Size":
 		if done == 0 {
 			return
 		}
