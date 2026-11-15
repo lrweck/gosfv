@@ -1,6 +1,6 @@
 # GoSFV
 
-**GoSFV** is a fast checksum creator and verifier for Windows: `.sfv`, `.md5`, `.sha1`, `.sha256` and `.xxh3`, with a color-coded file list, a job queue for folders, and the same engine in a scriptable headless mode. The desktop UI is native Go with [MyGo](https://github.com/egoist/mygo) 0.9.0 — no web view, no JavaScript, no C# runtime.
+**GoSFV** is a fast checksum creator and verifier for Windows, Linux and macOS: `.sfv`, `.md5`, `.sha1`, `.sha256` and `.xxh3`, with a color-coded file list, a job queue for folders, and the same engine in a scriptable headless mode. The desktop UI is native Go with [MyGo](https://github.com/egoist/mygo) 0.9.0 — no web view, no JavaScript, no C# runtime.
 
 | Light | Dark |
 | --- | --- |
