@@ -66,8 +66,8 @@ func (a *App) view(c *ui.Context) {
 		a.statusBar(c)
 		// The table comes first in the build so the sidebar sees the row
 		// this frame's click chose; Reverse keeps the sidebar on the left.
-		ui.Row(c).Fill().AlignItems(ui.Stretch).Reverse().Children(func() {
-			ui.Column(c).Fill().Grow(1).MinWidth(0).Children(func() {
+		ui.Row(c).FillWidth().Grow(1).Shrink(1).MinHeight(0).AlignItems(ui.Stretch).Reverse().Children(func() {
+			ui.Column(c).FillHeight().Grow(1).MinWidth(0).Children(func() {
 				if !a.modeJobs && a.settings.ShowFilter {
 					a.filterBar(c)
 				}
@@ -291,7 +291,7 @@ func (a *App) commentsBar(c *ui.Context) {
 
 func (a *App) fileTable(c *ui.Context) {
 	t := c.Theme()
-	card := ui.Column(c).Fill().Margin(10, 16, 0, 16).Radius(10).Border(1, t.Border).Clip()
+	card := ui.Column(c).FillWidth().Grow(1).Shrink(1).MinHeight(0).Margin(10, 16, 0, 16).Radius(10).Border(1, t.Border).Clip()
 	if len(a.store) == 0 {
 		card.Background(t.Surface).Children(func() {
 			ui.Column(c).Fill().Center().Gap(10).Padding(32).Children(func() {
@@ -426,22 +426,25 @@ func (a *App) footer(c *ui.Context) {
 		_, errs, _ := jobCounts(a.jobs)
 		failed = errs > 0
 	}
-	ui.Row(c).Padding(8, 16).Gap(12).AlignItems(ui.Center).Children(func() {
-		p := ui.Progress(c, frac).Height(6).Grow(1)
-		switch {
-		case a.paused:
-			p.TextColor(t.Warning)
-		case failed:
-			p.TextColor(t.Danger)
-		default:
-			p.TextColor(t.Success)
-		}
-		ui.Textf(c, "%.1f%%", frac*100).FontSize(11).TextColor(t.TextMuted).Width(48)
-		if a.processing && a.settings.ShowThroughput {
-			if speed := a.speedText(); speed != "" {
-				ui.Text(c, speed).FontSize(11).TextColor(t.TextMuted).SingleLine()
+	ui.Column(c).Shrink(0).Background(t.Surface).Children(func() {
+		ui.Divider(c)
+		ui.Row(c).Padding(6, 16).Gap(12).AlignItems(ui.Center).Children(func() {
+			p := ui.Progress(c, frac).Height(6).Grow(1)
+			switch {
+			case a.paused:
+				p.TextColor(t.Warning)
+			case failed:
+				p.TextColor(t.Danger)
+			default:
+				p.TextColor(t.Success)
 			}
-		}
+			ui.Textf(c, "%.1f%%", frac*100).FontSize(11).TextColor(t.TextMuted).Width(48)
+			if a.processing && a.settings.ShowThroughput {
+				if speed := a.speedText(); speed != "" {
+					ui.Text(c, speed).FontSize(11).TextColor(t.TextMuted).SingleLine()
+				}
+			}
+		})
 	})
 }
 
@@ -499,7 +502,7 @@ func (a *App) activePanel(c *ui.Context) {
 
 func (a *App) jobTable(c *ui.Context) {
 	t := c.Theme()
-	card := ui.Column(c).Fill().Margin(10, 16, 0, 16).Radius(10).Border(1, t.Border).Clip()
+	card := ui.Column(c).FillWidth().Grow(1).Shrink(1).MinHeight(0).Margin(10, 16, 0, 16).Radius(10).Border(1, t.Border).Clip()
 	if len(a.jobs) == 0 {
 		card.Background(t.Surface).Children(func() {
 			ui.Column(c).Fill().Center().Gap(10).Padding(32).Children(func() {

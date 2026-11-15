@@ -70,20 +70,33 @@ func TestRenderPreview(t *testing.T) {
 		a.mu.Unlock()
 		return a
 	}
+	maxRunning := func() *App {
+		a := running()
+		a.settings.ShowFilter = true
+		a.settings.ShowAdvanced = true
+		a.activeView = []activeFile{
+			{Name: "a.bin", Done: 9 << 30, Total: 18 << 30},
+			{Name: "b.bin", Done: 24 << 20, Total: 48 << 20},
+			{Name: "c.bin", Done: 0, Total: 4 << 30},
+		}
+		return a
+	}
 	cases := []struct {
 		name string
 		app  func() *App
 		dark bool
+		w, h int
 	}{
-		{"gosfv-files-light.png", filesApp, false},
-		{"gosfv-files-dark.png", filesApp, true},
-		{"gosfv-empty-light.png", empty, false},
-		{"gosfv-jobs-dark.png", jobs, true},
-		{"gosfv-running-light.png", running, false},
+		{"gosfv-files-light.png", filesApp, false, 1200, 720},
+		{"gosfv-files-dark.png", filesApp, true, 1200, 720},
+		{"gosfv-empty-light.png", empty, false, 1200, 720},
+		{"gosfv-jobs-dark.png", jobs, true, 1200, 720},
+		{"gosfv-running-light.png", running, false, 1200, 720},
+		{"gosfv-max-running.png", maxRunning, false, 1920, 1080},
 	}
 	for _, tc := range cases {
 		a := tc.app()
-		tt := ui.NewTesterWith(a.view, 1200, 720, ui.TesterOptions{Dark: tc.dark})
+		tt := ui.NewTesterWith(a.view, tc.w, tc.h, ui.TesterOptions{Dark: tc.dark})
 		f, err := os.Create(filepath.Join(dir, tc.name))
 		if err != nil {
 			t.Fatal(err)

@@ -177,6 +177,33 @@ func TestSortByProgress(t *testing.T) {
 	}
 }
 
+func TestFooterStaysVisibleWhenMaximized(t *testing.T) {
+	a := filesApp()
+	a.processing = true
+	a.stats = runner.Progress{Total: 3, Done: 1, OK: 1}
+	a.mu.Lock()
+	a.active[0] = activeFile{Name: "a.bin", Done: 9 << 30, Total: 18 << 30}
+	a.mu.Unlock()
+	a.settings.ShowFilter = true
+	a.settings.ShowAdvanced = true
+	a.activeView = []activeFile{
+		{Name: "a.bin", Done: 9 << 30, Total: 18 << 30},
+		{Name: "b.bin", Done: 24 << 20, Total: 48 << 20},
+		{Name: "c.bin", Done: 0, Total: 4 << 30},
+	}
+	tt := ui.NewTester(a.view, 1920, 1080)
+	r, ok := tt.Find("33.3%")
+	if !ok {
+		t.Fatalf("footer percentage not found; texts: %v", tt.Texts())
+	}
+	if r.Y+r.H > 1080 {
+		t.Errorf("footer is below the window: %+v", r)
+	}
+	if r.Y < 900 {
+		t.Errorf("footer is not at the bottom: %+v", r)
+	}
+}
+
 func TestFailedIndices(t *testing.T) {
 	a := testApp() // a OK, b BAD, c MISSING
 	a.store = append(a.store, model.File{ID: 4, Name: "d.bin", Status: model.Error})
