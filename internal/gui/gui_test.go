@@ -512,6 +512,65 @@ func TestStopThenRecheckFromTheButtons(t *testing.T) {
 	}
 }
 
+func TestStopThenRecheckACreatedList(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "big.bin")
+	f, err := os.Create(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Truncate(512 << 20); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	a := testApp()
+	a.runMain = func(fn func()) { fn() }
+	a.startRun([]string{p}, dir, false, "")
+
+	deadline := time.Now().Add(10 * time.Second)
+	for a.processing && len(a.store) == 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if len(a.store) != 1 || !a.processing {
+		t.Fatalf("creation did not start: processing=%v rows=%d verifying=%v", a.processing, len(a.store), a.verifying)
+	}
+
+	stop := ui.NewTester(a.view, 1200, 720)
+	if err := stop.Click("Stop"); err != nil {
+		t.Fatalf("Stop button: %v", err)
+	}
+	for a.processing && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if a.processing {
+		t.Fatal("Stop did not end the creation")
+	}
+	if a.store[0].Status == model.Error {
+		t.Errorf("a stopped row is an error: %v %q", a.store[0].Status, a.store[0].Err)
+	}
+
+	recheck := ui.NewTester(a.view, 1200, 720)
+	if err := recheck.Click("Recheck All"); err != nil {
+		t.Fatalf("Recheck All button on a created list: %v", err)
+	}
+	if !a.processing {
+		t.Fatal("Recheck All did not start a run on a created list")
+	}
+	deadline = time.Now().Add(30 * time.Second)
+	for a.processing && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if a.processing {
+		t.Fatal("recheck did not finish")
+	}
+	if a.store[0].Status != model.OK || len(a.store[0].Hash) != md5.Size {
+		t.Errorf("rechecked row = %v hash=%d", a.store[0].Status, len(a.store[0].Hash))
+	}
+}
+
 func TestApplyTickKeepsErrorReason(t *testing.T) {
 	a := testApp()
 	a.applyTick(runner.Progress{Total: 3}, []runner.Completed{{

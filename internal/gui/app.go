@@ -941,8 +941,8 @@ func (a *App) startRun(paths []string, base string, verify bool, checksumPath st
 // recheckSelected re-runs the verification for the chosen rows, or for the
 // whole list when nothing is chosen.
 func (a *App) recheckSelected() {
-	if !a.verifying || len(a.store) == 0 {
-		a.notice = "Open a checksum file before rechecking."
+	if len(a.store) == 0 {
+		a.notice = "Open a checksum file or add files before rechecking."
 		a.invalidate()
 		return
 	}
@@ -961,8 +961,8 @@ func (a *App) recheckSelected() {
 }
 
 func (a *App) recheckAll() {
-	if !a.verifying || len(a.store) == 0 {
-		a.notice = "Open a checksum file before rechecking."
+	if len(a.store) == 0 {
+		a.notice = "Open a checksum file or add files before rechecking."
 		a.invalidate()
 		return
 	}
@@ -1000,8 +1000,8 @@ func (a *App) unfinishedIndices() []int {
 }
 
 func (a *App) recheckFailed() {
-	if !a.verifying || len(a.store) == 0 {
-		a.notice = "Open a checksum file before rechecking."
+	if len(a.store) == 0 {
+		a.notice = "Open a checksum file or add files before rechecking."
 		a.invalidate()
 		return
 	}

@@ -287,15 +287,15 @@ func (a *App) fileContextMenu(m *ui.Menu, row int) {
 	}
 	m.Separator()
 	failed := a.failedIndices()
-	if m.Item("Recheck Selected").Disabled(a.processing || !a.verifying).Chosen() {
+	if m.Item("Recheck Selected").Disabled(a.processing).Chosen() {
 		list := append([]int(nil), targets...)
 		a.deferAction(func() { a.startRecheck(list) })
 	}
-	if m.Item("Recheck Failed").Disabled(a.processing || !a.verifying || len(failed) == 0).Chosen() {
+	if m.Item("Recheck Failed").Disabled(a.processing || len(failed) == 0).Chosen() {
 		list := append([]int(nil), failed...)
 		a.deferAction(func() { a.startRecheck(list) })
 	}
-	if m.Item("Recheck All").Disabled(a.processing || !a.verifying || len(a.store) == 0).Chosen() {
+	if m.Item("Recheck All").Disabled(a.processing || len(a.store) == 0).Chosen() {
 		a.deferAction(a.recheckAll)
 	}
 	m.Separator()
