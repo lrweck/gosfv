@@ -407,11 +407,20 @@ func run(ctx context.Context, files []model.File, opt Options, start time.Time, 
 			fileIdx := int(tasks[pos].Index)
 			hash := eng.Hash(pos)
 			status := model.OK
+			err := r.Err
 			switch {
-			case r.Err != nil:
+			case err != nil && ctx.Err() != nil && errors.Is(err, context.Canceled):
+				// A stopped run is not a file failure. Leave the row
+				// waiting so a recheck or a new verification picks it up
+				// again, and keep the cancellation out of the counts.
+				status = model.Queued
+				hash = nil
+				err = nil
+				completed--
+			case err != nil:
 				status = model.Error
 				counts.Error++
-				report.Problems = append(report.Problems, Problem{Name: files[fileIdx].FullPath(), Status: model.Error, Err: r.Err})
+				report.Problems = append(report.Problems, Problem{Name: files[fileIdx].FullPath(), Status: model.Error, Err: err})
 			case !verify:
 				counts.OK++
 			default:
@@ -431,12 +440,16 @@ func run(ctx context.Context, files []model.File, opt Options, start time.Time, 
 					report.Problems = append(report.Problems, Problem{Name: files[fileIdx].FullPath(), Status: model.Bad})
 				}
 			}
+			elapsed := r.Elapsed
+			if status == model.Queued {
+				elapsed = 0
+			}
 			batch = append(batch, Completed{
 				Index:   fileIdx,
 				Status:  status,
 				Hash:    hash,
-				Elapsed: r.Elapsed,
-				Err:     r.Err,
+				Elapsed: elapsed,
+				Err:     err,
 			})
 		}
 		p := progressFromEngine(eng, counts, missing+errorsPre, completed)

@@ -307,6 +307,37 @@ func TestFailedIndices(t *testing.T) {
 	}
 }
 
+func TestPauseAndStopStayOutOfTheRecheckSlots(t *testing.T) {
+	a := filesApp()
+	idle := ui.NewTester(a.view, 1200, 720)
+	if _, ok := idle.Find("Recheck Failed"); !ok {
+		t.Fatal("idle: Recheck Failed is missing from the status bar")
+	}
+	if _, ok := idle.Find("Stop"); ok {
+		t.Fatal("idle: Stop should only appear while a run is in progress")
+	}
+
+	a.processing = true
+	a.active[0] = activeFile{Name: "a.bin", Done: 10, Total: 100}
+	running := ui.NewTester(a.view, 1200, 720)
+	recheck, ok := running.Find("Recheck Failed")
+	if !ok {
+		t.Fatal("running: Recheck Failed left the status bar")
+	}
+	pause, ok := running.Find("Pause")
+	if !ok {
+		t.Fatal("running: Pause is missing from the footer")
+	}
+	stop, ok := running.Find("Stop")
+	if !ok {
+		t.Fatal("running: Stop is missing from the footer")
+	}
+	// A second click where Recheck Failed was must not reach Pause or Stop.
+	if recheck.Y+recheck.H > pause.Y || recheck.Y+recheck.H > stop.Y {
+		t.Errorf("Pause/Stop share the Recheck row: recheck=%+v pause=%+v stop=%+v", recheck, pause, stop)
+	}
+}
+
 func TestApplyTickKeepsErrorReason(t *testing.T) {
 	a := testApp()
 	a.applyTick(runner.Progress{Total: 3}, []runner.Completed{{

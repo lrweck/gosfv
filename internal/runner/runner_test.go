@@ -324,6 +324,52 @@ func TestRecheckRetriesErrorRows(t *testing.T) {
 	}
 }
 
+func TestStoppedRunLeavesRowsWaiting(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "big.bin")
+	f, err := os.Create(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Truncate(256 << 20); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var done []Completed
+	opt := Options{
+		Algo: hasher.MD5,
+		Tick: 5 * time.Millisecond,
+		OnFileProgress: func(int32, string, int64, int64) {
+			cancel()
+		},
+		OnTick: func(_ Progress, batch []Completed) {
+			done = append(done, batch...)
+		},
+	}
+	files := []model.File{{
+		Name: "big.bin", Rel: "big.bin", Dir: dir, Full: p,
+		Size: 256 << 20, Status: model.Queued,
+	}}
+	rep, err := run(ctx, files, opt, time.Now(), true, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Progress.Error != 0 || len(rep.Problems) != 0 {
+		t.Errorf("stopped run reported failures: %+v %+v", rep.Progress, rep.Problems)
+	}
+	if len(done) != 1 {
+		t.Fatalf("completed rows = %+v", done)
+	}
+	if done[0].Status != model.Queued || done[0].Err != nil {
+		t.Errorf("stopped row = %+v, want a waiting row without an error", done[0])
+	}
+}
+
 func TestStatFiles(t *testing.T) {
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "a.bin"), []byte("1234"))

@@ -1016,6 +1016,7 @@ func (a *App) startRecheck(indices []int) {
 	a.activeView = nil
 	a.stats = runner.Progress{Total: len(valid)}
 	a.elapsed = 0
+	a.selDirty = true
 	for _, i := range valid {
 		f := &a.store[i]
 		f.Status = model.Pending
@@ -1106,8 +1107,14 @@ func (a *App) finishRun(rep *runner.Report, err error) {
 				a.comments = rep.Comments
 			}
 		}
-		if recheck {
+		// A stopped run leaves unfinished rows waiting; count them from
+		// the store so the footer does not report them as errors or done.
+		// A recheck only covers a subset, so its report is not the list's
+		// totals either.
+		if a.cancelled || recheck {
 			a.recountStats()
+		}
+		if recheck {
 			if a.cancelled {
 				a.notice = "Recheck stopped."
 			} else {

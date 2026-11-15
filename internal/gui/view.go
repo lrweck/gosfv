@@ -176,12 +176,19 @@ func (a *App) statusBar(c *ui.Context) {
 			ui.Text(c, "Legacy SFV byte order").FontSize(11).Bold().TextColor(t.Warning)
 		}
 		ui.Spacer(c)
-		if a.verifying && !a.processing && !a.modeJobs && len(a.store) > 0 {
+		// The Recheck buttons keep their slots while a run is in progress,
+		// disabled: the Pause and Stop controls live in the footer, so a
+		// second click on Recheck cannot land on one of them.
+		if a.verifying && !a.modeJobs && len(a.store) > 0 {
 			label := "Recheck All"
 			if a.selection.Len() > 0 {
 				label = "Recheck Selected"
 			}
-			if ui.Button(c, label).Tooltip("Verify the chosen rows again, or the whole list").Clicked() {
+			tip := "Verify the chosen rows again, or the whole list"
+			if a.processing {
+				tip = "Wait for the current run to finish"
+			}
+			if ui.Button(c, label).Tooltip(tip).Disabled(a.processing).Clicked() {
 				if a.selection.Len() > 0 {
 					a.recheckSelected()
 				} else {
@@ -189,21 +196,9 @@ func (a *App) statusBar(c *ui.Context) {
 				}
 			}
 			if a.stats.Bad+a.stats.Missing+a.stats.Error > 0 {
-				if ui.Button(c, "Recheck Failed").Tooltip("Recheck only BAD, MISSING and ERROR rows").Clicked() {
+				if ui.Button(c, "Recheck Failed").Tooltip("Recheck only BAD, MISSING and ERROR rows").Disabled(a.processing).Clicked() {
 					a.recheckFailed()
 				}
-			}
-		}
-		if a.processing {
-			label := "Pause"
-			if a.paused {
-				label = "Resume"
-			}
-			if ui.Button(c, label).Tooltip("Pause or resume the current run").Clicked() {
-				a.togglePause()
-			}
-			if ui.Button(c, "Stop").Tooltip("Stop the current run; finished files keep their status").TextColor(t.Danger).Clicked() {
-				a.stopRun()
 			}
 		}
 		ui.Text(c, "Hash").FontSize(11).TextColor(t.TextMuted)
@@ -498,6 +493,18 @@ func (a *App) footer(c *ui.Context) {
 			if a.processing && a.settings.ShowThroughput {
 				if speed := a.speedText(); speed != "" {
 					ui.Text(c, speed).FontSize(11).TextColor(t.TextMuted).SingleLine()
+				}
+			}
+			if a.processing {
+				label := "Pause"
+				if a.paused {
+					label = "Resume"
+				}
+				if ui.Button(c, label).Width(86).Tooltip("Pause or resume the current run").Clicked() {
+					a.togglePause()
+				}
+				if ui.Button(c, "Stop").Width(70).Tooltip("Stop the current run; unfinished files stay waiting").TextColor(t.Danger).Clicked() {
+					a.stopRun()
 				}
 			}
 		})
