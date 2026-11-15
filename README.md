@@ -217,7 +217,7 @@ Packaged app with MyGo (the CLI is pinned as a tool in `go.mod`):
 
 ```powershell
 go tool mygo build
-# build/windows-amd64/GoSFV.exe and gosfv-setup-1.1.3-amd64.exe
+# build/windows-amd64/GoSFV.exe and gosfv-setup-1.1.4-amd64.exe
 ```
 
 ## Usage
