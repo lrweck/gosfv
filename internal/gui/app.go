@@ -398,7 +398,7 @@ func (a *App) refreshColumns() {
 		{Title: "File Name", ID: "Name", Width: 0, MinWidth: 240, MaxWidth: 520, Sortable: true},
 		{Title: "Size", ID: "Size", Width: 92, MinWidth: 70, Align: ui.End, Sortable: true},
 		{Title: "Progress", ID: "Progress", Width: 90, MinWidth: 72, Align: ui.End, Sortable: true},
-		{Title: "Status", ID: "Status", Width: 90, MinWidth: 70, Sortable: true},
+		{Title: "Status", ID: "Status", Width: 112, MinWidth: 100, Sortable: true},
 	}
 	if a.settings.ShowHashCol {
 		cols = append(cols, ui.TableColumn{Title: "Hash", ID: "Hash", Width: 340, MinWidth: 120, Sortable: true})

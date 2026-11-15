@@ -16,7 +16,7 @@
 - **Three UI modes:** the standard file list, a job queue that processes folder drops sequentially, and the compact "create checksum" window used by Explorer.
 - **Headless mode:** scriptable create and verify with progress and exit codes.
 - **Details sidebar:** the clicked file shows its status, size, modification date, hashes and timing; a multi-selection gets a count, size, status breakdown, folder count and largest/smallest file. The summary runs off the main thread with a progress bar, and selections above 1000 files show their count only.
-- **Live progress:** an overall bar with throughput and ETA; a **Size** and a **Progress** column in the table, with the percentage for each file as it is hashed; pause/resume and stop.
+- **Live progress:** an overall bar with throughput and ETA; a **Size** and a **Progress** column in the table, with the percentage for each file as it is hashed; the row being hashed says **PROCESSING** in Status and the footer names the phase (Scanning, Processing, Rechecking, Paused, Done); pause/resume and stop.
 - **Native progress:** the overall run is mirrored on the Windows taskbar, the macOS Dock and Linux launchers that implement the Unity API.
 - **Completion sound:** a clean verification plays the system alert when its window is not in front, so there is no audio file to ship.
 - **Recheck:** re-hash the selected rows, only the failed ones (BAD/MISSING/ERROR), or the whole list against the expected digests without reopening the checksum file; **File > Recheck > All** is F5.

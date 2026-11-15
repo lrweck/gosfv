@@ -68,6 +68,7 @@ func TestRenderPreview(t *testing.T) {
 		a.mu.Lock()
 		a.active[0] = activeFile{Name: "a.bin", Done: 9 << 30, Total: 18 << 30}
 		a.mu.Unlock()
+		a.activeView = []activeFile{{Name: "a.bin", Done: 9 << 30, Total: 18 << 30}}
 		return a
 	}
 	maxRunning := func() *App {

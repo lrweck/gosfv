@@ -177,6 +177,30 @@ func TestSortByProgress(t *testing.T) {
 	}
 }
 
+func TestFooterState(t *testing.T) {
+	a := &App{}
+	if got := a.footerState(); got != "Ready" {
+		t.Errorf("idle = %q", got)
+	}
+	a.processing, a.verifying = true, true
+	if got := a.footerState(); got != "Processing" {
+		t.Errorf("verifying = %q", got)
+	}
+	a.paused = true
+	if got := a.footerState(); got != "Paused" {
+		t.Errorf("paused = %q", got)
+	}
+	a.paused, a.rechecking = false, true
+	if got := a.footerState(); got != "Rechecking" {
+		t.Errorf("recheck = %q", got)
+	}
+	a.processing, a.verifying, a.rechecking = false, false, false
+	a.stats = runner.Progress{Total: 2, Done: 2}
+	if got := a.footerState(); got != "Done" {
+		t.Errorf("done = %q", got)
+	}
+}
+
 func TestFooterStaysVisibleWhenMaximized(t *testing.T) {
 	a := filesApp()
 	a.processing = true
@@ -245,7 +269,7 @@ func TestViewShowsSizeAndProgress(t *testing.T) {
 	a.active[0] = activeFile{Name: "a.bin", Done: 50, Total: 100}
 	a.mu.Unlock()
 	tt := ui.NewTester(a.view, 1400, 720)
-	for _, text := range []string{"1.5 KiB", "1.0 MiB", "50.0%", "100.0%"} {
+	for _, text := range []string{"1.5 KiB", "1.0 MiB", "50.0%", "100.0%", "PROCESSING"} {
 		if !tt.HasText(text) {
 			t.Errorf("table does not show %q; texts: %v", text, tt.Texts())
 		}

@@ -159,6 +159,9 @@ func (a *App) statusBar(c *ui.Context) {
 			if a.stats.Error > 0 {
 				a.statChip(c, "ERROR", a.stats.Error, t.Danger)
 			}
+			if a.processing || a.jobRunning {
+				a.statChip(c, "ACTIVE", len(a.activeView), t.Accent)
+			}
 		}
 		if a.settings.ShowThroughput && a.processing {
 			if speed := a.speedText(); speed != "" {
@@ -395,11 +398,19 @@ func (a *App) fileCell(c *ui.Context, row, col int) {
 			ui.Text(c, "").TextColor(mutedColor)
 		}
 	case "Status":
-		color := a.statusColor(c, f.Status)
-		if chosen {
-			color = t.AccentText
+		if _, _, active := a.progressOfFile(idx); active {
+			color := t.Accent
+			if chosen {
+				color = t.AccentText
+			}
+			ui.Text(c, "PROCESSING").SingleLine().Bold().TextColor(color)
+		} else {
+			color := a.statusColor(c, f.Status)
+			if chosen {
+				color = t.AccentText
+			}
+			ui.Text(c, f.Status.String()).SingleLine().Bold().TextColor(color)
 		}
-		ui.Text(c, f.Status.String()).SingleLine().Bold().TextColor(color)
 	case "Expected":
 		if len(f.Expected) > 0 {
 			h := hexfmt.Upper(f.Expected)
@@ -426,9 +437,17 @@ func (a *App) footer(c *ui.Context) {
 		_, errs, _ := jobCounts(a.jobs)
 		failed = errs > 0
 	}
+	stateColor := t.TextMuted
+	switch {
+	case a.paused:
+		stateColor = t.Warning
+	case a.processing || a.jobRunning:
+		stateColor = t.Text
+	}
 	ui.Column(c).Shrink(0).Background(t.Surface).Children(func() {
 		ui.Divider(c)
 		ui.Row(c).Padding(6, 16).Gap(12).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, a.footerState()).FontSize(11).Bold().TextColor(stateColor).Shrink(0)
 			p := ui.Progress(c, frac).Height(6).Grow(1)
 			switch {
 			case a.paused:
@@ -446,6 +465,31 @@ func (a *App) footer(c *ui.Context) {
 			}
 		})
 	})
+}
+
+// footerState names what the run is doing in one word, so the footer is not
+// just a percentage.
+func (a *App) footerState() string {
+	switch {
+	case a.paused:
+		return "Paused"
+	case a.scanning:
+		return "Scanning"
+	case a.rechecking:
+		return "Rechecking"
+	case a.jobRunning:
+		return "Job queue"
+	case a.processing && a.verifying:
+		return "Processing"
+	case a.processing:
+		return "Creating"
+	case a.cancelled:
+		return "Stopped"
+	case a.stats.Total > 0 && a.stats.Done >= a.stats.Total:
+		return "Done"
+	default:
+		return "Ready"
+	}
 }
 
 func (a *App) currentFraction() float64 {
