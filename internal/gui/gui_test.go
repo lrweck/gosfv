@@ -120,6 +120,39 @@ func TestViewShowsDetailsSidebar(t *testing.T) {
 	}
 }
 
+func TestLiveSortByProgress(t *testing.T) {
+	a := testApp()
+	a.sort = ui.SortOrder{Column: "Progress"}
+	a.applyView()
+	for row, idx := range a.viewRows {
+		if a.store[idx].Name == "a.bin" {
+			a.activeRow = row
+		}
+	}
+	a.mu.Lock()
+	a.active[0] = activeFile{Name: "a.bin", Done: 25, Total: 100}
+	a.mu.Unlock()
+	a.liveSort(0)
+	if got := []string{a.store[a.viewRows[0]].Name, a.store[a.viewRows[1]].Name, a.store[a.viewRows[2]].Name}; got[0] != "c.bin" || got[1] != "a.bin" || got[2] != "b.bin" {
+		t.Errorf("first live sort = %v", got)
+	}
+	if a.activeRow != 1 {
+		t.Errorf("active row = %d, want 1", a.activeRow)
+	}
+
+	// c.bin moves ahead of a.bin as its own progress rises.
+	a.mu.Lock()
+	a.active[2] = activeFile{Name: "c.bin", Done: 50, Total: 100}
+	a.mu.Unlock()
+	a.liveSort(0)
+	if got := []string{a.store[a.viewRows[0]].Name, a.store[a.viewRows[1]].Name, a.store[a.viewRows[2]].Name}; got[0] != "a.bin" || got[1] != "c.bin" || got[2] != "b.bin" {
+		t.Errorf("second live sort = %v", got)
+	}
+	if a.activeRow != 0 {
+		t.Errorf("active row = %d, want 0", a.activeRow)
+	}
+}
+
 func TestSortByProgress(t *testing.T) {
 	a := testApp()
 	a.mu.Lock()

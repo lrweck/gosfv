@@ -20,6 +20,7 @@
 - **Native progress:** the overall run is mirrored on the Windows taskbar, the macOS Dock and Linux launchers that implement the Unity API.
 - **Completion sound:** a clean verification plays the system alert when its window is not in front, so there is no audio file to ship.
 - **Recheck:** re-hash a selection or the whole list against the expected digests without reopening the checksum file; **File > Recheck All** is F5.
+- **Live sorting:** when the order is by Progress, Status, Time, Hash or Size, the list re-sorts as files change during a run (up to 100,000 rows; a larger list sorts on the next header click).
 - **Filtering:** instant name search, status filter, and duplicate detection by checksum.
 - **Bad-file tools:** move BAD/ERROR files into `_BAD_FILES`, rename them to `*.CORRUPT`, or generate `.bat` scripts to delete them or resolve duplicates.
 - **Portable settings:** `GoSFV.ini` beside the executable; legacy key names from the original Windows tool are still read.

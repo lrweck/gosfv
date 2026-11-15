@@ -708,11 +708,52 @@ func (a *App) applyTick(p runner.Progress, done []runner.Completed) {
 	a.stats = p
 	a.elapsed = p.Elapsed
 	a.syncActive()
+	a.liveSort(len(done))
 	if a.modeJobs {
 		a.updateJobProgress(p)
 	}
 	a.updateProblemMenus()
 	a.updateNativeProgress()
+}
+
+// liveSortMax keeps a live re-sort from dominating the main thread on a
+// million-row list. Above it the explicit header click still sorts.
+const liveSortMax = 100000
+
+// liveSort keeps the view in order when the sort column itself changes
+// during a run: Progress moves as chunks arrive; Status, Time, Hash and Size
+// move when a file finishes. Static columns are left alone.
+func (a *App) liveSort(done int) {
+	col := a.sort.Column
+	if a.modeJobs || col == "" || a.sort != a.appliedSort || len(a.viewRows) < 2 || len(a.viewRows) > liveSortMax {
+		return
+	}
+	switch col {
+	case "Progress":
+		// The active fractions move between ticks.
+	case "Status", "Time", "Hash", "Size":
+		if done == 0 {
+			return
+		}
+	default:
+		return
+	}
+
+	// The table selects by key, but Selected is a row index; keep the row
+	// it points at on the same file after the order changes.
+	var activeID uint64
+	if a.activeRow >= 0 && a.activeRow < len(a.viewRows) {
+		activeID = a.store[a.viewRows[a.activeRow]].ID
+	}
+	a.sortView(a.viewRows)
+	if activeID != 0 {
+		for row, idx := range a.viewRows {
+			if a.store[idx].ID == activeID {
+				a.activeRow = row
+				break
+			}
+		}
+	}
 }
 
 // progressOfFile is the current done and total for a row being hashed.
