@@ -133,14 +133,15 @@ func TestLiveSortByProgress(t *testing.T) {
 	a.active[0] = activeFile{Name: "a.bin", Done: 25, Total: 100}
 	a.mu.Unlock()
 	a.liveSort(0)
-	if got := []string{a.store[a.viewRows[0]].Name, a.store[a.viewRows[1]].Name, a.store[a.viewRows[2]].Name}; got[0] != "c.bin" || got[1] != "a.bin" || got[2] != "b.bin" {
+	// a is being worked on, b finished, c has no value.
+	if got := []string{a.store[a.viewRows[0]].Name, a.store[a.viewRows[1]].Name, a.store[a.viewRows[2]].Name}; got[0] != "a.bin" || got[1] != "b.bin" || got[2] != "c.bin" {
 		t.Errorf("first live sort = %v", got)
 	}
-	if a.activeRow != 1 {
-		t.Errorf("active row = %d, want 1", a.activeRow)
+	if a.activeRow != 0 {
+		t.Errorf("active row = %d, want 0", a.activeRow)
 	}
 
-	// c.bin moves ahead of a.bin as its own progress rises.
+	// c.bin joins the active group and stays after a.bin while ascending.
 	a.mu.Lock()
 	a.active[2] = activeFile{Name: "c.bin", Done: 50, Total: 100}
 	a.mu.Unlock()
@@ -157,18 +158,21 @@ func TestSortByProgress(t *testing.T) {
 	a := testApp()
 	a.mu.Lock()
 	a.active[0] = activeFile{Name: "a.bin", Done: 25, Total: 100}
+	a.active[2] = activeFile{Name: "c.bin", Done: 50, Total: 100}
 	a.mu.Unlock()
 
 	a.sort = ui.SortOrder{Column: "Progress"}
 	a.applyView()
 	got := []string{a.store[a.viewRows[0]].Name, a.store[a.viewRows[1]].Name, a.store[a.viewRows[2]].Name}
-	if got[0] != "c.bin" || got[1] != "a.bin" || got[2] != "b.bin" {
+	// Active files first (25, 50), then the completed one.
+	if got[0] != "a.bin" || got[1] != "c.bin" || got[2] != "b.bin" {
 		t.Errorf("ascending = %v", got)
 	}
 	a.sort.Descending = true
 	a.applyView()
 	got = []string{a.store[a.viewRows[0]].Name, a.store[a.viewRows[1]].Name, a.store[a.viewRows[2]].Name}
-	if got[0] != "b.bin" || got[1] != "a.bin" || got[2] != "c.bin" {
+	// The active group stays first; only its order flips.
+	if got[0] != "c.bin" || got[1] != "a.bin" || got[2] != "b.bin" {
 		t.Errorf("descending = %v", got)
 	}
 }
