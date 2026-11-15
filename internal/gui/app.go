@@ -1017,12 +1017,12 @@ func (a *App) recheckFailed() {
 // resumeRun continues a stopped verification: it rechecks only the rows that
 // have no result yet, leaving the OK and BAD rows as they are.
 func (a *App) resumeRun() {
-	if !a.verifying || len(a.store) == 0 {
-		a.notice = "Open a checksum file before resuming."
+	if len(a.store) == 0 {
+		a.notice = "Nothing to resume."
 		a.invalidate()
 		return
 	}
-	if a.processing {
+	if a.processing || a.jobRunning {
 		a.notice = "Busy: wait for the current operation to finish."
 		a.invalidate()
 		return
@@ -1033,11 +1033,12 @@ func (a *App) resumeRun() {
 		a.invalidate()
 		return
 	}
-	a.startRecheck(idx)
+	a.startHashes(idx)
 }
 
-// startRecheck hashes the chosen rows again against the expected digests
-// already in the list. Unlike startRun it keeps the list, the checksum path's
+// startRecheck rehashes the chosen rows. On a verification it compares them
+// with the expected digests; on a list built by creating hashes it simply
+// recomputes them. Unlike startRun it keeps the list, the checksum path's
 // comments and the rest of the rows untouched.
 func (a *App) startRecheck(indices []int) {
 	if a.processing || a.jobRunning {
@@ -1045,8 +1046,21 @@ func (a *App) startRecheck(indices []int) {
 		a.invalidate()
 		return
 	}
-	if !a.verifying || len(a.store) == 0 {
-		a.notice = "Open a checksum file before rechecking."
+	if len(a.store) == 0 {
+		a.notice = "Open a checksum file or add files before rechecking."
+		a.invalidate()
+		return
+	}
+	a.startHashes(indices)
+}
+
+// startHashes rehashes a subset of the list in place. On a verification the
+// rows are compared with their Expected digests; on a creation list Expected
+// is nil, so the run only fills Hash and turns each row OK. Resume uses it to
+// continue a stopped creation.
+func (a *App) startHashes(indices []int) {
+	if a.processing || a.jobRunning {
+		a.notice = "Busy: wait for the current operation to finish."
 		a.invalidate()
 		return
 	}
@@ -1057,13 +1071,19 @@ func (a *App) startRecheck(indices []int) {
 		}
 	}
 	if len(valid) == 0 {
+		a.notice = "Nothing to run."
+		a.invalidate()
 		return
 	}
 	a.processing = true
 	a.rechecking = true
 	a.paused = false
 	a.cancelled = false
-	a.notice = fmt.Sprintf("Rechecking %d file(s)...", len(valid))
+	if a.verifying {
+		a.notice = fmt.Sprintf("Rechecking %d file(s)...", len(valid))
+	} else {
+		a.notice = fmt.Sprintf("Hashing %d file(s)...", len(valid))
+	}
 	a.scanning = false
 	a.scanCount = len(valid)
 	a.active = map[int32]activeFile{}
@@ -1169,11 +1189,17 @@ func (a *App) finishRun(rep *runner.Report, err error) {
 			a.recountStats()
 		}
 		if recheck {
-			if a.cancelled {
+			switch {
+			case a.cancelled && a.verifying:
 				a.notice = "Recheck stopped."
-			} else {
+			case a.cancelled:
+				a.notice = "Hashing stopped."
+			case a.verifying:
 				a.notice = fmt.Sprintf("Rechecked %d file(s): %d OK, %d BAD, %d missing, %d error.",
 					rep.Progress.Total, rep.Progress.OK, rep.Progress.Bad, rep.Progress.Missing, rep.Progress.Error)
+			default:
+				a.notice = fmt.Sprintf("Hashed %d file(s): %d OK, %d missing, %d error.",
+					rep.Progress.Total, rep.Progress.OK, rep.Progress.Missing, rep.Progress.Error)
 			}
 		} else if rep.Progress.Total == 0 && !a.cancelled {
 			if a.verifying {
@@ -1314,7 +1340,7 @@ func (a *App) title() string {
 		return "GoSFV - Job Queue [" + a.algo.ShortLabel() + "]"
 	}
 	if a.processing {
-		if a.rechecking {
+		if a.rechecking && a.verifying {
 			return "GoSFV - Rechecking... [" + a.algo.ShortLabel() + "]"
 		}
 		if a.verifying {

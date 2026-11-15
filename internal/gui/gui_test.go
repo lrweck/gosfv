@@ -405,6 +405,49 @@ func TestUnfinishedIndices(t *testing.T) {
 	}
 }
 
+func TestRecheckInACreationList(t *testing.T) {
+	dir := t.TempDir()
+	data := []byte("charlie")
+	p := filepath.Join(dir, "c.bin")
+	if err := os.WriteFile(p, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sum := md5.Sum(data)
+
+	a := testApp()
+	a.runMain = func(fn func()) { fn() }
+	a.verifying = false // a list built by creating hashes has no Expected
+	a.algo = hasher.MD5
+	a.store = []model.File{{
+		ID: 1, Name: "c.bin", Rel: "c.bin", Dir: dir, Full: p,
+		Size: int64(len(data)), Status: model.Queued,
+	}}
+	a.viewRows = []int{0}
+	a.stats = runner.Progress{Total: 1}
+	a.refreshColumns()
+
+	a.startRecheck([]int{0})
+	deadline := time.Now().Add(5 * time.Second)
+	for a.processing && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if a.processing {
+		t.Fatal("recheck did not finish")
+	}
+	if a.store[0].Status != model.OK || !bytes.Equal(a.store[0].Hash, sum[:]) {
+		t.Errorf("rechecked row = %v hash=%x", a.store[0].Status, a.store[0].Hash)
+	}
+}
+
+func TestRecheckButtonOnACreatedList(t *testing.T) {
+	a := testApp()
+	a.verifying = false
+	tt := ui.NewTester(a.view, 1200, 720)
+	if _, ok := tt.Find("Recheck All"); !ok {
+		t.Fatal("Recheck All is missing from a created list")
+	}
+}
+
 func TestResumeHashesOnlyTheWaitingRows(t *testing.T) {
 	dir := t.TempDir()
 	dataA := []byte("alpha")
