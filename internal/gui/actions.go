@@ -286,6 +286,14 @@ func (a *App) fileContextMenu(m *ui.Menu, row int) {
 		a.deferAction(func() { a.copyIndices(list) })
 	}
 	m.Separator()
+	if m.Item("Recheck Selected").Disabled(a.processing || !a.verifying).Chosen() {
+		list := append([]int(nil), targets...)
+		a.deferAction(func() { a.startRecheck(list) })
+	}
+	if m.Item("Recheck All").Disabled(a.processing || !a.verifying || len(a.store) == 0).Chosen() {
+		a.deferAction(a.recheckAll)
+	}
+	m.Separator()
 	if m.Item("Rename File...").Disabled(!single || !exists || a.processing).Chosen() {
 		idx := targets[0]
 		a.deferAction(func() { a.beginRename(idx) })

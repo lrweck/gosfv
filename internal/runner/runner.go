@@ -59,6 +59,10 @@ type Options struct {
 	OnTick func(p Progress, done []Completed)
 	// OnFileProgress is called by workers for files of 50 MiB or more.
 	OnFileProgress func(index int32, path string, done, total int64)
+	// OnRecheck, when Recheck runs, receives the selected files after their
+	// stat and before hashing. indices[j] is the caller's index of files[j],
+	// so an existing list can take the new size and status back.
+	OnRecheck func(files []model.File, indices []int)
 }
 
 // Completed is one file that just finished.
@@ -172,6 +176,55 @@ func Verify(ctx context.Context, checksumPath string, opt Options) (*Report, err
 	return run(ctx, files, opt, start, true, checksumPath, parsed.Comments)
 }
 
+// Recheck re-hashes files already in a list against their Expected digests.
+// It does not parse a checksum file or replace the caller's list: it takes a
+// copy of the selected entries, stats and hashes them, and maps the progress
+// results back to the caller's indices. indices may be empty to recheck all.
+func Recheck(ctx context.Context, files []model.File, indices []int, opt Options) (*Report, error) {
+	start := time.Now()
+	if len(indices) == 0 {
+		indices = make([]int, len(files))
+		for i := range indices {
+			indices[i] = i
+		}
+	}
+	subset := make([]model.File, 0, len(indices))
+	orig := make([]int, 0, len(indices))
+	for _, i := range indices {
+		if i < 0 || i >= len(files) {
+			continue
+		}
+		f := files[i]
+		f.Status = model.Queued
+		f.Hash = nil
+		f.Elapsed = 0
+		subset = append(subset, f)
+		orig = append(orig, i)
+	}
+	if len(subset) == 0 {
+		return &Report{Progress: Progress{Elapsed: time.Since(start)}}, nil
+	}
+	statFiles(ctx, subset, statWorkers(opt))
+	if opt.OnRecheck != nil {
+		opt.OnRecheck(subset, orig)
+	}
+	inner := opt.OnTick
+	opt.OnTick = func(p Progress, done []Completed) {
+		for k := range done {
+			if done[k].Index >= 0 && done[k].Index < len(orig) {
+				done[k].Index = orig[done[k].Index]
+			} else {
+				done[k].Index = -1
+			}
+		}
+		if inner != nil {
+			inner(p, done)
+		}
+	}
+	opt.OnFiles = nil
+	return run(ctx, subset, opt, start, true, "", nil)
+}
+
 // statWorkers is how many goroutines look files up. Stat is a syscall per
 // entry, and on a checksum with tens of thousands of files it is the
 // dominant cost of verification; one worker stays for sequential disks.
@@ -210,7 +263,7 @@ func statFiles(ctx context.Context, files []model.File, workers int) {
 					return
 				}
 				f := &files[i]
-				info, err := os.Stat(f.Full)
+				info, err := os.Stat(f.FullPath())
 				switch {
 				case err != nil:
 					f.Status = model.Missing

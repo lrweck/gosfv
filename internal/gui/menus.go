@@ -37,6 +37,10 @@ func (a *App) buildMenu() {
 	file := &mygo.MenuItem{Label: "File", Submenu: []*mygo.MenuItem{
 		{Label: "Open...", Accelerator: "CmdOrCtrl+O", Click: click(a.openDialog)},
 		{Label: "Save As...", Accelerator: "CmdOrCtrl+S", Click: click(a.saveAs)},
+		mygo.Separator(),
+		{Label: "Recheck Selected", Click: click(a.recheckSelected)},
+		{Label: "Recheck All", Accelerator: "F5", Click: click(a.recheckAll)},
+		mygo.Separator(),
 		{Label: "Clear List", Click: click(a.clearList)},
 		mygo.Separator(),
 		{Role: mygo.RoleQuit},

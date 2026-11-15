@@ -149,6 +149,87 @@ func TestCreateCRC32StandardByteOrder(t *testing.T) {
 	}
 }
 
+func TestRecheck(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "a.bin"), []byte("alpha"))
+	write(t, filepath.Join(dir, "b.bin"), []byte("beta"))
+	files := []model.File{
+		{ID: 1, Name: "a.bin", Rel: "a.bin", Dir: dir, Status: model.OK, Expected: md5sum([]byte("alpha"))},
+		{ID: 2, Name: "b.bin", Rel: "b.bin", Dir: dir, Status: model.OK, Expected: md5sum([]byte("wrong"))},
+	}
+
+	c := newCapture()
+	opt := c.opts(hasher.MD5)
+	var rechecked []int
+	opt.OnRecheck = func(fs []model.File, idx []int) {
+		rechecked = append([]int(nil), idx...)
+	}
+	rep, err := Recheck(context.Background(), files, nil, opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Progress.Total != 2 || rep.Progress.OK != 1 || rep.Progress.Bad != 1 {
+		t.Errorf("progress = %+v", rep.Progress)
+	}
+	if len(rechecked) != 2 || rechecked[0] != 0 || rechecked[1] != 1 {
+		t.Errorf("rechecked indices = %v", rechecked)
+	}
+	if c.done[0] != model.OK || c.done[1] != model.Bad {
+		t.Errorf("statuses = %v", c.done)
+	}
+
+	// A single-index recheck only touches that row.
+	c = newCapture()
+	opt = c.opts(hasher.MD5)
+	rep, err = Recheck(context.Background(), files, []int{1}, opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Progress.Total != 1 || rep.Progress.Bad != 1 {
+		t.Errorf("single progress = %+v", rep.Progress)
+	}
+	if c.done[1] != model.Bad {
+		t.Errorf("single status = %v", c.done)
+	}
+	if _, ok := c.done[0]; ok {
+		t.Errorf("index 0 should not have been rechecked: %v", c.done)
+	}
+}
+
+func TestRecheckMissing(t *testing.T) {
+	dir := t.TempDir()
+	a := filepath.Join(dir, "a.bin")
+	write(t, a, []byte("alpha"))
+	write(t, filepath.Join(dir, "b.bin"), []byte("beta"))
+	files := []model.File{
+		{ID: 1, Name: "a.bin", Rel: "a.bin", Dir: dir, Status: model.OK, Expected: md5sum([]byte("alpha"))},
+		{ID: 2, Name: "b.bin", Rel: "b.bin", Dir: dir, Status: model.OK, Expected: md5sum([]byte("beta"))},
+	}
+	if err := os.Remove(a); err != nil {
+		t.Fatal(err)
+	}
+	c := newCapture()
+	opt := c.opts(hasher.MD5)
+	var stat model.Status
+	opt.OnRecheck = func(fs []model.File, idx []int) {
+		for j, i := range idx {
+			if i == 0 {
+				stat = fs[j].Status
+			}
+		}
+	}
+	rep, err := Recheck(context.Background(), files, nil, opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stat != model.Missing {
+		t.Errorf("stat status = %v", stat)
+	}
+	if rep.Progress.Missing != 1 || rep.Progress.OK != 1 {
+		t.Errorf("progress = %+v", rep.Progress)
+	}
+}
+
 func TestStatFiles(t *testing.T) {
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "a.bin"), []byte("1234"))

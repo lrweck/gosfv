@@ -227,6 +227,9 @@ func (a *App) sectionTitle() string {
 	if a.modeJobs {
 		return "Job Queue"
 	}
+	if a.rechecking {
+		return "Rechecking"
+	}
 	if a.verifying {
 		return "Verifying"
 	}

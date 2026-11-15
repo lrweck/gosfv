@@ -92,6 +92,7 @@ type App struct {
 	algoSet    bool
 	verifying  bool
 	processing bool
+	rechecking bool
 	paused     bool
 	scanning   bool
 	scanCount  int
@@ -860,13 +861,136 @@ func (a *App) startRun(paths []string, base string, verify bool, checksumPath st
 	}()
 }
 
+// recheckSelected re-runs the verification for the chosen rows, or for the
+// whole list when nothing is chosen.
+func (a *App) recheckSelected() {
+	if !a.verifying || len(a.store) == 0 {
+		a.notice = "Open a checksum file before rechecking."
+		a.invalidate()
+		return
+	}
+	var idx []int
+	for i := range a.store {
+		if a.selection.Has(a.store[i].ID) {
+			idx = append(idx, i)
+		}
+	}
+	if len(idx) == 0 {
+		a.notice = "Select one or more rows to recheck, or use Recheck All."
+		a.invalidate()
+		return
+	}
+	a.startRecheck(idx)
+}
+
+func (a *App) recheckAll() {
+	if !a.verifying || len(a.store) == 0 {
+		a.notice = "Open a checksum file before rechecking."
+		a.invalidate()
+		return
+	}
+	idx := make([]int, len(a.store))
+	for i := range idx {
+		idx[i] = i
+	}
+	a.startRecheck(idx)
+}
+
+// startRecheck hashes the chosen rows again against the expected digests
+// already in the list. Unlike startRun it keeps the list, the checksum path's
+// comments and the rest of the rows untouched.
+func (a *App) startRecheck(indices []int) {
+	if a.processing || a.jobRunning {
+		a.notice = "Busy: wait for the current operation to finish."
+		a.invalidate()
+		return
+	}
+	if !a.verifying || len(a.store) == 0 {
+		a.notice = "Open a checksum file before rechecking."
+		a.invalidate()
+		return
+	}
+	valid := make([]int, 0, len(indices))
+	for _, i := range indices {
+		if i >= 0 && i < len(a.store) {
+			valid = append(valid, i)
+		}
+	}
+	if len(valid) == 0 {
+		return
+	}
+	a.processing = true
+	a.rechecking = true
+	a.paused = false
+	a.cancelled = false
+	a.notice = ""
+	a.scanning = false
+	a.scanCount = len(valid)
+	a.active = map[int32]activeFile{}
+	a.activeView = nil
+	a.stats = runner.Progress{Total: len(valid)}
+	a.elapsed = 0
+	for _, i := range valid {
+		f := &a.store[i]
+		f.Status = model.Pending
+		f.Hash = nil
+		f.Elapsed = 0
+	}
+	a.gate = engine.NewGate()
+	ctx, cancel := context.WithCancel(context.Background())
+	a.cancel = cancel
+	a.refreshColumns()
+	a.syncAlgoMenu()
+	a.syncViewMenu()
+	a.updateTitle()
+	a.updateProblemMenus()
+	a.updateNativeProgress()
+	a.invalidate()
+
+	base := a.base
+	if base == "" && len(a.store) > 0 {
+		base = a.store[0].Dir
+	}
+	seq := drive.Sequential(a.settings.ProcMode, drive.Detect(base))
+	opt := runner.Options{
+		Algo:       a.algo,
+		Sequential: seq,
+		Gate:       a.gate,
+		OnTick: func(p runner.Progress, done []runner.Completed) {
+			mygo.RunOnMain(func() { a.applyTick(p, done) })
+			a.invalidate()
+		},
+		OnRecheck: func(files []model.File, idx []int) {
+			mygo.RunOnMain(func() {
+				for j, i := range idx {
+					if i >= 0 && i < len(a.store) {
+						a.store[i].Status = files[j].Status
+						a.store[i].Size = files[j].Size
+					}
+				}
+			})
+			a.invalidate()
+		},
+	}
+	go func() {
+		rep, err := runner.Recheck(ctx, a.store, valid, opt)
+		mygo.RunOnMain(func() { a.finishRun(rep, err) })
+		a.invalidate()
+	}()
+}
+
 func (a *App) finishRun(rep *runner.Report, err error) {
+	recheck := a.rechecking
+	a.rechecking = false
 	a.processing = false
 	a.scanning = false
 	a.paused = false
 	a.cancel = nil
 	a.clearActive()
 	if err != nil {
+		if recheck {
+			a.recountStats()
+		}
 		a.notice = err.Error()
 		if !errors.Is(err, context.Canceled) {
 			_, _ = mygo.Dialog.Message(mygo.MessageOptions{
@@ -887,11 +1011,21 @@ func (a *App) finishRun(rep *runner.Report, err error) {
 	if rep != nil {
 		a.stats = rep.Progress
 		a.elapsed = rep.Progress.Elapsed
-		a.legacy = rep.Legacy
-		if a.verifying {
-			a.comments = rep.Comments
+		if !recheck {
+			a.legacy = rep.Legacy
+			if a.verifying {
+				a.comments = rep.Comments
+			}
 		}
-		if rep.Progress.Total == 0 && !a.cancelled {
+		if recheck {
+			a.recountStats()
+			if a.cancelled {
+				a.notice = "Recheck stopped."
+			} else {
+				a.notice = fmt.Sprintf("Rechecked %d file(s): %d OK, %d BAD, %d missing, %d error.",
+					rep.Progress.Total, rep.Progress.OK, rep.Progress.Bad, rep.Progress.Missing, rep.Progress.Error)
+			}
+		} else if rep.Progress.Total == 0 && !a.cancelled {
 			if a.verifying {
 				a.notice = "The checksum file has no entries."
 			} else {
@@ -1025,6 +1159,9 @@ func (a *App) title() string {
 		return "GoSFV - Job Queue [" + a.algo.ShortLabel() + "]"
 	}
 	if a.processing {
+		if a.rechecking {
+			return "GoSFV - Rechecking... [" + a.algo.ShortLabel() + "]"
+		}
 		if a.verifying {
 			return "GoSFV - Verifying... [" + a.algo.ShortLabel() + "]"
 		}
