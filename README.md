@@ -184,6 +184,22 @@ Requirements: Go 1.27.3 or newer. The `go` command downloads the toolchain `go.m
 go build -o GoSFV.exe .
 ```
 
+### Go install
+
+The main package is at the module root, so `go install` works on Windows,
+Linux and macOS without cloning:
+
+```bash
+go install github.com/lrweck/gosfv@latest
+```
+
+The binary is installed as `gosfv` (`gosfv.exe` on Windows) in
+`$(go env GOPATH)/bin`, usually `%USERPROFILE%\go\bin` on Windows. `go install`
+builds without `GOEXPERIMENT=simd`; the portable hex codec is used and the hash
+algorithms keep their assembly/SIMD implementations. On Linux the GUI still
+loads the system GTK 3 libraries at runtime; `-headless` needs neither a
+display nor those libraries.
+
 With the experimental SIMD codec:
 
 ```powershell
