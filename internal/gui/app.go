@@ -62,13 +62,14 @@ type App struct {
 	closing atomic.Bool
 	started atomic.Bool
 
-	store     []model.File
-	viewRows  []int
-	byID      []int
-	list      ui.ListState
-	selection ui.Selection[uint64]
-	activeRow int
-	cols      []ui.TableColumn
+	store      []model.File
+	viewRows   []int
+	byID       []int
+	list       ui.ListState
+	selection  ui.Selection[uint64]
+	activeRow  int
+	rowClicked bool
+	cols       []ui.TableColumn
 
 	sel       selectionInfo
 	selSig    selectionSig
@@ -1005,7 +1006,7 @@ func (a *App) startRecheck(indices []int) {
 	a.rechecking = true
 	a.paused = false
 	a.cancelled = false
-	a.notice = ""
+	a.notice = fmt.Sprintf("Rechecking %d file(s)...", len(valid))
 	a.scanning = false
 	a.scanCount = len(valid)
 	a.active = map[int32]activeFile{}

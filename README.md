@@ -19,7 +19,7 @@
 - **Live progress:** an overall bar with throughput and ETA; a **Size** and a **Progress** column in the table, with the percentage for each file as it is hashed; the row being hashed says **PROCESSING** in Status and the footer names the phase (Scanning, Processing, Rechecking, Paused, Done); pause/resume and stop.
 - **Native progress:** the overall run is mirrored on the Windows taskbar, the macOS Dock and Linux launchers that implement the Unity API.
 - **Completion sound:** a clean verification plays the system alert when its window is not in front, so there is no audio file to ship.
-- **Recheck:** re-hash the selected rows, only the failed ones (BAD/MISSING/ERROR), or the whole list against the expected digests without reopening the checksum file; **File > Recheck > All** is F5.
+- **Recheck:** re-hash the selected rows, only the failed ones (BAD/MISSING/ERROR), or the whole list against the expected digests without reopening the checksum file; **File > Recheck All** is F5, and the status bar has a Recheck button. Clicking the empty area below the rows clears the selection.
 - **Live sorting:** when the order is by Progress, Status, Time, Hash or Size, the list re-sorts as files change during a run (up to 100,000 rows; a larger list sorts on the next header click). In the Progress order, files being hashed stay at the top, then the finished ones, then the rows with no value; the direction applies inside the active group.
 - **Filtering:** instant name search, status filter, and duplicate detection by checksum.
 - **Bad-file tools:** move BAD/ERROR files into `_BAD_FILES`, rename them to `*.CORRUPT`, or generate `.bat` scripts to delete them or resolve duplicates.
@@ -233,7 +233,8 @@ go tool mygo build
 - The **Size** column shows each file's size and **Progress** shows its live percentage while it is being hashed; the bar at the bottom is the whole run.
 - The same overall progress appears on the taskbar (Windows), Dock (macOS) or launcher (Linux).
 - A verification where every file matched beeps with the system sound if the window is in the background.
-- Right-click a row for **Recheck Selected** / **Recheck Failed** / **Recheck All**, or use **File > Recheck** (All is F5), to verify again after fixing files; the rest of the list and its expected hashes stay as they are.
+- Right-click a row for **Recheck Selected** / **Recheck Failed** / **Recheck All**, use the Recheck button in the status bar, or **File > Recheck All** (F5) to verify again after fixing files; the rest of the list and its expected hashes stay as they are.
+- Clicking the empty space below the rows clears the selection; clicking a row keeps it.
 - While a run is active, **Pause/Resume** and **Stop** sit in the status bar, and **Mode > Pause / Resume Run** and **Stop Run** bind them to F7 and F8. While paused the elapsed time and ETA freeze and the throughput reads `0.0 MB/s`; resuming continues from where it stopped.
 - Use **Options > System Integration** to add or remove Explorer entries.
 

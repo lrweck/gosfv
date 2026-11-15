@@ -178,6 +178,23 @@ func TestSortByProgress(t *testing.T) {
 	}
 }
 
+func TestProgressFractionUsesBytes(t *testing.T) {
+	a := &App{stats: runner.Progress{Total: 10, Done: 5, BytesTotal: 1000, BytesDone: 800}}
+	if got := a.progressFraction(); got < 0.79 || got > 0.81 {
+		t.Errorf("byte fraction = %v, want 0.8", got)
+	}
+	// Once every file is applied, the count wins even if a task read less
+	// than its size before failing.
+	a.stats.Done = 10
+	if got := a.progressFraction(); got != 1 {
+		t.Errorf("finished fraction = %v, want 1", got)
+	}
+	a.stats = runner.Progress{Total: 10, Done: 5}
+	if got := a.progressFraction(); got != 0.5 {
+		t.Errorf("count fraction = %v, want 0.5", got)
+	}
+}
+
 func TestSpeedTextPaused(t *testing.T) {
 	a := &App{
 		processing: true,
@@ -435,5 +452,27 @@ func TestSelectedIndices(t *testing.T) {
 	a.selection.Clear()
 	if got := a.selectedIndices(); len(got) != 0 {
 		t.Errorf("empty selection = %v", got)
+	}
+}
+
+func TestClickOutsideDeselects(t *testing.T) {
+	a := testApp()
+	tt := ui.NewTester(a.view, 1200, 720)
+	if err := tt.Click("a.bin"); err != nil {
+		t.Fatal(err)
+	}
+	if a.selection.Len() != 1 {
+		t.Fatalf("selection after click = %d", a.selection.Len())
+	}
+	tt.Advance(2 * time.Second) // past the double-click interval
+	if err := tt.Click("a.bin"); err != nil {
+		t.Fatal(err)
+	}
+	if a.selection.Len() != 1 {
+		t.Fatalf("clicking the chosen row cleared it: %d", a.selection.Len())
+	}
+	tt.ClickAt(800, 400)
+	if a.selection.Len() != 0 {
+		t.Errorf("selection after empty click = %d", a.selection.Len())
 	}
 }

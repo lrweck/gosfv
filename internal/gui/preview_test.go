@@ -64,7 +64,12 @@ func TestRenderPreview(t *testing.T) {
 	running := func() *App {
 		a := filesApp()
 		a.processing = true
-		a.stats = runner.Progress{Total: 3, Done: 1, OK: 1, SpeedBPS: 800 << 20, ETA: 30 * time.Second}
+		a.stats = runner.Progress{
+			Total: 3, Done: 1, OK: 1,
+			BytesTotal: (18 << 30) + (4 << 30) + (48 << 20),
+			BytesDone:  (9 << 30) + (24 << 20),
+			SpeedBPS:   800 << 20, ETA: 30 * time.Second,
+		}
 		a.mu.Lock()
 		a.active[0] = activeFile{Name: "a.bin", Done: 9 << 30, Total: 18 << 30}
 		a.mu.Unlock()

@@ -31,6 +31,7 @@ func (a *App) view(c *ui.Context) {
 			fn()
 		}
 	}
+	a.rowClicked = false
 	if a.sortDirty {
 		a.sortDirty = false
 		if a.sort != a.appliedSort {
@@ -175,6 +176,19 @@ func (a *App) statusBar(c *ui.Context) {
 			ui.Text(c, "Legacy SFV byte order").FontSize(11).Bold().TextColor(t.Warning)
 		}
 		ui.Spacer(c)
+		if a.verifying && !a.processing && !a.modeJobs && len(a.store) > 0 {
+			label := "Recheck All"
+			if a.selection.Len() > 0 {
+				label = "Recheck Selected"
+			}
+			if ui.Button(c, label).Tooltip("Verify the chosen rows again, or the whole list").Clicked() {
+				if a.selection.Len() > 0 {
+					a.recheckSelected()
+				} else {
+					a.recheckAll()
+				}
+			}
+		}
 		if a.processing {
 			label := "Pause"
 			if a.paused {
@@ -317,7 +331,8 @@ func (a *App) fileTable(c *ui.Context) {
 		tbl := ui.Table(c, &a.list, a.cols, len(a.viewRows), func(row, col int) {
 			a.fileCell(c, row, col)
 		}).Grow(1)
-		if tbl.Changed() {
+		changed := tbl.Changed()
+		if changed {
 			if a.sort != a.appliedSort {
 				a.sortDirty = true
 			}
@@ -329,6 +344,14 @@ func (a *App) fileTable(c *ui.Context) {
 				}
 			}
 			c.Invalidate()
+		}
+		// A press on the table but not on any row clears the choice. A row
+		// click sets rowClicked through RowClicked in fileCell, and a
+		// header, resize or sort sets changed.
+		if tbl.PressedInside() && !a.rowClicked && !changed {
+			a.selection.Clear()
+			a.activeRow = -1
+			a.selDirty = true
 		}
 		if tbl.Submitted() {
 			a.deferAction(func() { a.openSelectedFolder() })
@@ -352,79 +375,85 @@ func (a *App) fileCell(c *ui.Context, row, col int) {
 		textColor = t.AccentText
 		mutedColor = t.AccentText
 	}
-	switch a.cols[col].ID {
-	case "Name":
-		text := f.Rel
-		if a.settings.ShowFullPaths {
-			text = f.FullPath()
-		}
-		color := a.statusColor(c, f.Status)
-		if chosen {
-			color = t.AccentText
-		}
-		ui.Text(c, text).SingleLine().TextColor(color).Tooltip(f.FullPath())
-	case "Size":
-		size := "—"
-		switch {
-		case f.Size > 0:
-			size = formatBytes(f.Size)
-		case f.Status == model.OK || f.Status == model.Bad:
-			size = "0 B"
-		}
-		ui.Text(c, size).SingleLine().FontSize(11).TextColor(textColor)
-	case "Progress":
-		if done, total, ok := a.progressOfFile(idx); ok && total > 0 {
-			pct := float64(done) / float64(total) * 100
-			if pct > 100 {
-				pct = 100
+	cell := ui.Row(c).FillWidth()
+	if cell.RowClicked() {
+		a.rowClicked = true
+	}
+	cell.Children(func() {
+		switch a.cols[col].ID {
+		case "Name":
+			text := f.Rel
+			if a.settings.ShowFullPaths {
+				text = f.FullPath()
 			}
-			color := t.Accent
-			if chosen {
-				color = t.AccentText
-			}
-			ui.Textf(c, "%.1f%%", pct).SingleLine().FontSize(11).Bold().TextColor(color)
-		} else if f.Status == model.OK || f.Status == model.Bad {
-			ui.Text(c, "100.0%").SingleLine().FontSize(11).TextColor(mutedColor)
-		} else {
-			ui.Text(c, "—").SingleLine().TextColor(mutedColor)
-		}
-	case "Hash":
-		if f.Hash != nil {
-			h := hexfmt.Upper(f.Hash)
-			ui.Text(c, h).SingleLine().FontSize(11).TextColor(textColor).Tooltip(h)
-		} else if f.Status == model.Queued || f.Status == model.Pending {
-			ui.Text(c, "Pending").TextColor(mutedColor)
-		} else {
-			ui.Text(c, "").TextColor(mutedColor)
-		}
-	case "Status":
-		if _, _, active := a.progressOfFile(idx); active {
-			color := t.Accent
-			if chosen {
-				color = t.AccentText
-			}
-			ui.Text(c, "PROCESSING").SingleLine().Bold().TextColor(color)
-		} else {
 			color := a.statusColor(c, f.Status)
 			if chosen {
 				color = t.AccentText
 			}
-			ui.Text(c, f.Status.String()).SingleLine().Bold().TextColor(color)
+			ui.Text(c, text).SingleLine().TextColor(color).Tooltip(f.FullPath())
+		case "Size":
+			size := "—"
+			switch {
+			case f.Size > 0:
+				size = formatBytes(f.Size)
+			case f.Status == model.OK || f.Status == model.Bad:
+				size = "0 B"
+			}
+			ui.Text(c, size).SingleLine().FontSize(11).TextColor(textColor)
+		case "Progress":
+			if done, total, ok := a.progressOfFile(idx); ok && total > 0 {
+				pct := float64(done) / float64(total) * 100
+				if pct > 100 {
+					pct = 100
+				}
+				color := t.Accent
+				if chosen {
+					color = t.AccentText
+				}
+				ui.Textf(c, "%.1f%%", pct).SingleLine().FontSize(11).Bold().TextColor(color)
+			} else if f.Status == model.OK || f.Status == model.Bad {
+				ui.Text(c, "100.0%").SingleLine().FontSize(11).TextColor(mutedColor)
+			} else {
+				ui.Text(c, "—").SingleLine().TextColor(mutedColor)
+			}
+		case "Hash":
+			if f.Hash != nil {
+				h := hexfmt.Upper(f.Hash)
+				ui.Text(c, h).SingleLine().FontSize(11).TextColor(textColor).Tooltip(h)
+			} else if f.Status == model.Queued || f.Status == model.Pending {
+				ui.Text(c, "Pending").TextColor(mutedColor)
+			} else {
+				ui.Text(c, "").TextColor(mutedColor)
+			}
+		case "Status":
+			if _, _, active := a.progressOfFile(idx); active {
+				color := t.Accent
+				if chosen {
+					color = t.AccentText
+				}
+				ui.Text(c, "PROCESSING").SingleLine().Bold().TextColor(color)
+			} else {
+				color := a.statusColor(c, f.Status)
+				if chosen {
+					color = t.AccentText
+				}
+				ui.Text(c, f.Status.String()).SingleLine().Bold().TextColor(color)
+			}
+		case "Expected":
+			if len(f.Expected) > 0 {
+				h := hexfmt.Upper(f.Expected)
+				ui.Text(c, h).SingleLine().FontSize(11).TextColor(textColor).Tooltip(h)
+			} else {
+				ui.Text(c, "").TextColor(mutedColor)
+			}
+		case "Time":
+			if f.Elapsed > 0 {
+				ui.Textf(c, "%d ms", f.Elapsed.Milliseconds()).SingleLine().FontSize(11).TextColor(textColor)
+			} else {
+				ui.Text(c, "")
+			}
 		}
-	case "Expected":
-		if len(f.Expected) > 0 {
-			h := hexfmt.Upper(f.Expected)
-			ui.Text(c, h).SingleLine().FontSize(11).TextColor(textColor).Tooltip(h)
-		} else {
-			ui.Text(c, "").TextColor(mutedColor)
-		}
-	case "Time":
-		if f.Elapsed > 0 {
-			ui.Textf(c, "%d ms", f.Elapsed.Milliseconds()).SingleLine().FontSize(11).TextColor(textColor)
-		} else {
-			ui.Text(c, "")
-		}
-	}
+	})
 }
 
 // footer holds the only full-width progress: the file list, the job queue
@@ -692,7 +721,16 @@ func (a *App) progressFraction() float64 {
 	if a.stats.Total <= 0 {
 		return 0
 	}
-	p := float64(a.stats.Done) / float64(a.stats.Total)
+	// While a run is in progress the bar follows bytes, not finished files:
+	// one 18 GiB file would otherwise leave it still until the whole file
+	// ended. When every file has been applied, the count is authoritative
+	// (some tasks can end with errors after reading only part of the file).
+	var p float64
+	if a.stats.BytesTotal > 0 && a.stats.Done < a.stats.Total {
+		p = float64(a.stats.BytesDone) / float64(a.stats.BytesTotal)
+	} else {
+		p = float64(a.stats.Done) / float64(a.stats.Total)
+	}
 	if p < 0 {
 		return 0
 	}
