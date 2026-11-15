@@ -442,7 +442,10 @@ func (a *App) fileCell(c *ui.Context, row, col int) {
 				if chosen {
 					color = t.AccentText
 				}
-				ui.Text(c, f.Status.String()).SingleLine().Bold().TextColor(color)
+				status := ui.Text(c, f.Status.String()).SingleLine().Bold().TextColor(color)
+				if f.Err != "" {
+					status.Tooltip(f.Err)
+				}
 			}
 		case "Expected":
 			if len(f.Expected) > 0 {

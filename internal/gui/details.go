@@ -114,6 +114,10 @@ func (a *App) singleDetails(c *ui.Context, d *fileDetail) {
 	})
 	ui.Text(c, d.Name).FontSize(15).Bold().SingleLine().Tooltip(d.Name)
 	ui.Text(c, d.Path).FontSize(10).TextColor(t.TextMuted).SingleLine().Tooltip(d.Path)
+	if d.Err != "" {
+		ui.Text(c, "Last error").FontSize(10).Bold().TextColor(t.Danger).SingleLine()
+		ui.Text(c, d.Err).FontSize(11).TextColor(t.Danger).Tooltip(d.Err)
+	}
 	ui.Divider(c)
 	a.detailField(c, "Size", formatBytes(d.Size))
 	// Always present: the field goes from "—" to the date when the stat

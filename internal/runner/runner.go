@@ -63,6 +63,10 @@ type Options struct {
 	// stat and before hashing. indices[j] is the caller's index of files[j],
 	// so an existing list can take the new size and status back.
 	OnRecheck func(files []model.File, indices []int)
+	// RetryErrors hashes files whose status is Error instead of skipping
+	// them. Recheck sets it: an error from a stopped or failed run is a
+	// reason to try again, not to skip the row.
+	RetryErrors bool
 }
 
 // Completed is one file that just finished.
@@ -231,6 +235,7 @@ func Recheck(ctx context.Context, files []model.File, indices []int, opt Options
 		}
 	}
 	opt.OnFiles = nil
+	opt.RetryErrors = true
 	return run(ctx, subset, opt, start, true, "", nil)
 }
 
@@ -276,10 +281,13 @@ func statFiles(ctx context.Context, files []model.File, workers int) {
 				switch {
 				case err != nil:
 					f.Status = model.Missing
+					f.Err = err.Error()
 				case info.IsDir():
 					f.Status = model.Error
+					f.Err = "is a directory"
 				default:
 					f.Size = info.Size()
+					f.Err = ""
 				}
 			}
 		}()
@@ -331,7 +339,7 @@ func run(ctx context.Context, files []model.File, opt Options, start time.Time, 
 	// caller already shows them. Build tasks only for files that exist.
 	tasks := make([]engine.Task, 0, len(files))
 	for i := range files {
-		if files[i].Status == model.Missing || files[i].Status == model.Error {
+		if files[i].Status == model.Missing || (files[i].Status == model.Error && !opt.RetryErrors) {
 			continue
 		}
 		tasks = append(tasks, engine.Task{
@@ -349,6 +357,9 @@ func run(ctx context.Context, files []model.File, opt Options, start time.Time, 
 			missing++
 			report.Problems = append(report.Problems, Problem{Name: files[i].FullPath(), Status: model.Missing})
 		case model.Error:
+			if opt.RetryErrors {
+				continue
+			}
 			errorsPre++
 			report.Problems = append(report.Problems, Problem{Name: files[i].FullPath(), Status: model.Error})
 		}

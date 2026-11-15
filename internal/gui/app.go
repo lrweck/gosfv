@@ -712,6 +712,12 @@ func (a *App) applyTick(p runner.Progress, done []runner.Completed) {
 			f.Hash = d.Hash
 		}
 		f.Status = d.Status
+		switch {
+		case d.Status == model.Error && d.Err != nil:
+			f.Err = d.Err.Error()
+		case d.Status != model.Error:
+			f.Err = ""
+		}
 		f.Elapsed = d.Elapsed
 		delete(a.active, int32(d.Index))
 	}
@@ -1014,6 +1020,7 @@ func (a *App) startRecheck(indices []int) {
 		f := &a.store[i]
 		f.Status = model.Pending
 		f.Hash = nil
+		f.Err = ""
 		f.Elapsed = 0
 	}
 	a.gate = engine.NewGate()
@@ -1047,6 +1054,7 @@ func (a *App) startRecheck(indices []int) {
 					if i >= 0 && i < len(a.store) {
 						a.store[i].Status = files[j].Status
 						a.store[i].Size = files[j].Size
+						a.store[i].Err = files[j].Err
 					}
 				}
 			})

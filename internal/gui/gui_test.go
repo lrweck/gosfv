@@ -2,6 +2,7 @@ package gui
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -303,6 +304,25 @@ func TestFailedIndices(t *testing.T) {
 	got := a.failedIndices()
 	if len(got) != 3 || got[0] != 1 || got[1] != 2 || got[2] != 3 {
 		t.Errorf("failed = %v", got)
+	}
+}
+
+func TestApplyTickKeepsErrorReason(t *testing.T) {
+	a := testApp()
+	a.applyTick(runner.Progress{Total: 3}, []runner.Completed{{
+		Index: 1, Status: model.Error, Err: errors.New("access denied"),
+	}})
+	if a.store[1].Status != model.Error || a.store[1].Err != "access denied" {
+		t.Fatalf("row = %+v", a.store[1])
+	}
+	if got := detailOf(&a.store[1]).Err; got != "access denied" {
+		t.Errorf("details error = %q", got)
+	}
+	a.applyTick(runner.Progress{Total: 3}, []runner.Completed{{
+		Index: 1, Status: model.OK, Hash: a.store[1].Expected,
+	}})
+	if a.store[1].Err != "" {
+		t.Errorf("stale error kept after a success: %q", a.store[1].Err)
 	}
 }
 

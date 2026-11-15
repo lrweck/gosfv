@@ -20,12 +20,13 @@ type capture struct {
 	files  []model.File
 	done   map[int]model.Status
 	hashes map[int][]byte
+	errs   map[int]string
 	ticks  int
 	last   Progress
 }
 
 func newCapture() *capture {
-	return &capture{done: map[int]model.Status{}, hashes: map[int][]byte{}}
+	return &capture{done: map[int]model.Status{}, hashes: map[int][]byte{}, errs: map[int]string{}}
 }
 
 func (c *capture) opts(algo hasher.Kind) Options {
@@ -42,6 +43,9 @@ func (c *capture) opts(algo hasher.Kind) Options {
 			for _, d := range done {
 				c.done[d.Index] = d.Status
 				c.hashes[d.Index] = append([]byte(nil), d.Hash...)
+				if d.Err != nil {
+					c.errs[d.Index] = d.Err.Error()
+				}
 			}
 		},
 	}
@@ -279,6 +283,47 @@ func TestRecheckErrorStatus(t *testing.T) {
 	}
 }
 
+func TestRunRetriesErrors(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "a.bin"), []byte("alpha"))
+	files := []model.File{{
+		ID: 1, Name: "a.bin", Rel: "a.bin", Dir: dir,
+		Status: model.Error, Expected: md5sum([]byte("alpha")),
+	}}
+	rep, err := run(context.Background(), files, Options{Algo: hasher.MD5, RetryErrors: true},
+		time.Now(), true, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Progress.OK != 1 || rep.Progress.Error != 0 {
+		t.Errorf("progress = %+v", rep.Progress)
+	}
+}
+
+func TestRecheckRetriesErrorRows(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "folder"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := []model.File{{
+		ID: 1, Name: "folder", Rel: "folder", Dir: dir,
+		Status: model.Error, Expected: md5sum([]byte("x")),
+	}}
+	c := newCapture()
+	rep, err := Recheck(context.Background(), files, nil, c.opts(hasher.MD5))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The row is attempted even though its status was Error, and the
+	// failure is reported again with the reason from the operating system.
+	if rep.Progress.Error != 1 || c.done[0] != model.Error {
+		t.Errorf("progress = %+v statuses = %v", rep.Progress, c.done)
+	}
+	if c.errs[0] == "" {
+		t.Error("no error reason reported for the retried row")
+	}
+}
+
 func TestStatFiles(t *testing.T) {
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "a.bin"), []byte("1234"))
@@ -291,17 +336,16 @@ func TestStatFiles(t *testing.T) {
 		{Full: filepath.Join(dir, "folder")},
 	}
 	statFiles(context.Background(), files, 4)
-	if files[0].Size != 4 || files[0].Status != model.Queued {
+	if files[0].Size != 4 || files[0].Status != model.Queued || files[0].Err != "" {
 		t.Errorf("file = %+v", files[0])
 	}
-	if files[1].Status != model.Missing {
+	if files[1].Status != model.Missing || files[1].Err == "" {
 		t.Errorf("missing = %+v", files[1])
 	}
-	if files[2].Status != model.Error {
+	if files[2].Status != model.Error || files[2].Err != "is a directory" {
 		t.Errorf("directory = %+v", files[2])
 	}
 }
-
 func TestVerifyLegacyCRC32Endian(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "a.bin")

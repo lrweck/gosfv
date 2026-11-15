@@ -67,6 +67,7 @@ type fileDetail struct {
 	Elapsed  time.Duration
 	Hash     string
 	Expected string
+	Err      string
 
 	StatOK  bool
 	StatErr string
@@ -209,6 +210,7 @@ func detailOf(f *model.File) fileDetail {
 		Elapsed:  f.Elapsed,
 		Hash:     hexfmt.Upper(f.Hash),
 		Expected: hexfmt.Upper(f.Expected),
+		Err:      f.Err,
 	}
 }
 

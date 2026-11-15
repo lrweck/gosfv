@@ -15,11 +15,11 @@
 - **System, light or dark:** the window follows the desktop by default; **View > Appearance** and the Theme selector in the header switch it with a short fade, and the choice is saved in `GoSFV.ini`.
 - **Three UI modes:** the standard file list, a job queue that processes folder drops sequentially, and the compact "create checksum" window used by Explorer.
 - **Headless mode:** scriptable create and verify with progress and exit codes.
-- **Details sidebar:** the clicked file shows its status, size, modification date, hashes and timing; a multi-selection gets a count, size, status breakdown, folder count and largest/smallest file. The summary runs off the main thread with a progress bar, and selections above 1000 files show their count only.
+- **Details sidebar:** the clicked file shows its status, size, modification date, hashes and timing; an ERROR row also shows the operating system's message for the last failure. A multi-selection gets a count, size, status breakdown, folder count and largest/smallest file. The summary runs off the main thread with a progress bar, and selections above 1000 files show their count only.
 - **Live progress:** an overall bar with throughput and ETA; a **Size** and a **Progress** column in the table, with the percentage for each file as it is hashed; the row being hashed says **PROCESSING** in Status and the footer names the phase (Scanning, Processing, Rechecking, Paused, Done); pause/resume and stop.
 - **Native progress:** the overall run is mirrored on the Windows taskbar, the macOS Dock and Linux launchers that implement the Unity API.
 - **Completion sound:** a clean verification plays the system alert when its window is not in front, so there is no audio file to ship.
-- **Recheck:** re-hash the selected rows, only the failed ones (BAD/MISSING/ERROR), or the whole list against the expected digests without reopening the checksum file; **File > Recheck All** is F5, and the status bar has a Recheck button. Clicking the empty area below the rows clears the selection.
+- **Recheck:** re-hash the selected rows, only the failed ones (BAD/MISSING/ERROR), or the whole list against the expected digests without reopening the checksum file; **File > Recheck All** is F5, and the status bar has a Recheck button. ERROR rows are retried even if they failed during a stopped run, and the sidebar plus the Status tooltip show why a row failed again. Clicking the empty area below the rows clears the selection.
 - **Live sorting:** when the order is by Progress, Status, Time, Hash or Size, the list re-sorts as files change during a run (up to 100,000 rows; a larger list sorts on the next header click). Progress is a plain percentage order; sort by Status to group the rows that say PROCESSING.
 - **Filtering:** instant name search, status filter, and duplicate detection by checksum.
 - **Bad-file tools:** move BAD/ERROR files into `_BAD_FILES`, rename them to `*.CORRUPT`, or generate `.bat` scripts to delete them or resolve duplicates.
@@ -217,7 +217,7 @@ Packaged app with MyGo (the CLI is pinned as a tool in `go.mod`):
 
 ```powershell
 go tool mygo build
-# build/windows-amd64/GoSFV.exe and gosfv-setup-1.1.4-amd64.exe
+# build/windows-amd64/GoSFV.exe and gosfv-setup-1.1.5-amd64.exe
 ```
 
 ## Usage
@@ -233,7 +233,7 @@ go tool mygo build
 - The **Size** column shows each file's size and **Progress** shows its live percentage while it is being hashed; the bar at the bottom is the whole run.
 - The same overall progress appears on the taskbar (Windows), Dock (macOS) or launcher (Linux).
 - A verification where every file matched beeps with the system sound if the window is in the background.
-- Right-click a row for **Recheck Selected** / **Recheck Failed** / **Recheck All**, use the Recheck button in the status bar, or **File > Recheck All** (F5) to verify again after fixing files; the rest of the list and its expected hashes stay as they are.
+- Right-click a row for **Recheck Selected** / **Recheck Failed** / **Recheck All**, use the Recheck button in the status bar, or **File > Recheck All** (F5) to verify again after fixing files; the rest of the list and its expected hashes stay as they are. An ERROR row is always attempted again, and if it fails once more the sidebar and the Status tooltip name the reason.
 - Clicking the empty space below the rows clears the selection; clicking a row keeps it.
 - While a run is active, **Pause/Resume** and **Stop** sit in the status bar, and **Mode > Pause / Resume Run** and **Stop Run** bind them to F7 and F8. While paused the elapsed time and ETA freeze and the throughput reads `0.0 MB/s`; resuming continues from where it stopped.
 - Use **Options > System Integration** to add or remove Explorer entries.

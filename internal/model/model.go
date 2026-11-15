@@ -58,7 +58,12 @@ type File struct {
 	Expected []byte // expected digest, nil when creating
 	Hash     []byte // calculated digest, a slice of an arena
 	Status   Status
-	Elapsed  time.Duration
+	// Err is why the last hash or stat failed, when Status is Error or
+	// Missing. It is the operating system's message, so the UI can say
+	// that a row was retried and failed again for the same reason instead
+	// of showing a bare ERROR.
+	Err     string
+	Elapsed time.Duration
 }
 
 // FullPath returns the absolute path, reconstructing it only when Full was
