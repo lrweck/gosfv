@@ -2,6 +2,7 @@ package gui
 
 import (
 	"bytes"
+	"crypto/md5"
 	"errors"
 	"os"
 	"path/filepath"
@@ -335,6 +336,183 @@ func TestPauseAndStopStayOutOfTheRecheckSlots(t *testing.T) {
 	// A second click where Recheck Failed was must not reach Pause or Stop.
 	if recheck.Y+recheck.H > pause.Y || recheck.Y+recheck.H > stop.Y {
 		t.Errorf("Pause/Stop share the Recheck row: recheck=%+v pause=%+v stop=%+v", recheck, pause, stop)
+	}
+}
+
+func TestOnMainUsesTheUICallback(t *testing.T) {
+	a := testApp()
+	old := postToMain
+	t.Cleanup(func() { postToMain = old })
+	postToMain = func(fn func()) { fn() }
+	ran := false
+	// Production leaves runMain nil; a self call here would recurse until
+	// the stack overflows.
+	a.onMain(func() { ran = true })
+	if !ran {
+		t.Error("onMain did not run the callback")
+	}
+}
+
+func TestStartRecheckHashesAnErrorRow(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "a.bin")
+	data := []byte("alpha")
+	if err := os.WriteFile(p, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sum := md5.Sum(data)
+
+	a := testApp()
+	a.runMain = func(fn func()) { fn() } // the runner goroutine drives the UI state
+	a.verifying = true
+	a.algo = hasher.MD5
+	a.store = []model.File{{
+		ID: 1, Name: "a.bin", Rel: "a.bin", Dir: dir, Full: p,
+		Size: int64(len(data)), Expected: sum[:], Status: model.Error, Err: "context canceled",
+	}}
+	a.viewRows = []int{0}
+	a.stats = runner.Progress{Total: 1, Done: 1, Error: 1}
+	a.refreshColumns()
+
+	a.startRecheck([]int{0})
+	deadline := time.Now().Add(5 * time.Second)
+	for a.processing && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if a.processing {
+		t.Fatal("recheck did not finish")
+	}
+	if a.store[0].Status != model.OK {
+		t.Errorf("status = %v, error = %q", a.store[0].Status, a.store[0].Err)
+	}
+	if a.store[0].Err != "" {
+		t.Errorf("stale error kept: %q", a.store[0].Err)
+	}
+	if !bytes.Equal(a.store[0].Hash, sum[:]) {
+		t.Errorf("hash = %x, want %x", a.store[0].Hash, sum)
+	}
+}
+
+func TestUnfinishedIndices(t *testing.T) {
+	a := testApp() // a OK, b BAD, c MISSING
+	a.store = append(a.store,
+		model.File{ID: 4, Status: model.Queued},
+		model.File{ID: 5, Status: model.Pending},
+	)
+	got := a.unfinishedIndices()
+	if len(got) != 2 || got[0] != 3 || got[1] != 4 {
+		t.Errorf("unfinished = %v", got)
+	}
+}
+
+func TestResumeHashesOnlyTheWaitingRows(t *testing.T) {
+	dir := t.TempDir()
+	dataA := []byte("alpha")
+	dataB := []byte("bravo")
+	pathA := filepath.Join(dir, "a.bin")
+	pathB := filepath.Join(dir, "b.bin")
+	if err := os.WriteFile(pathA, dataA, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(pathB, dataB, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sumA := md5.Sum(dataA)
+	sumB := md5.Sum(dataB)
+	sentinel := bytes.Repeat([]byte{0xaa}, md5.Size)
+
+	a := testApp()
+	a.runMain = func(fn func()) { fn() }
+	a.verifying = true
+	a.cancelled = true
+	a.algo = hasher.MD5
+	a.store = []model.File{
+		{ID: 1, Name: "a.bin", Rel: "a.bin", Dir: dir, Full: pathA, Size: int64(len(dataA)),
+			Expected: sumA[:], Hash: sentinel, Status: model.OK},
+		{ID: 2, Name: "b.bin", Rel: "b.bin", Dir: dir, Full: pathB, Size: int64(len(dataB)),
+			Expected: sumB[:], Status: model.Queued},
+	}
+	a.viewRows = []int{0, 1}
+	a.stats = runner.Progress{Total: 2, Done: 1, OK: 1}
+	a.refreshColumns()
+
+	a.resumeRun()
+	deadline := time.Now().Add(5 * time.Second)
+	for a.processing && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if a.processing {
+		t.Fatal("resume did not finish")
+	}
+	if !bytes.Equal(a.store[0].Hash, sentinel) {
+		t.Error("the finished row was hashed again")
+	}
+	if a.store[1].Status != model.OK || !bytes.Equal(a.store[1].Hash, sumB[:]) {
+		t.Errorf("resumed row = %v hash=%x", a.store[1].Status, a.store[1].Hash)
+	}
+}
+
+func TestStopThenResumeFromTheButtons(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "big.bin")
+	f, err := os.Create(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Truncate(512 << 20); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	sum := strings.Repeat("0", 32)
+	checks := filepath.Join(dir, "checks.md5")
+	if err := os.WriteFile(checks, []byte(sum+"  big.bin\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	a := testApp()
+	a.runMain = func(fn func()) { fn() }
+	a.startRun([]string{checks}, dir, true, checks)
+
+	deadline := time.Now().Add(10 * time.Second)
+	for a.processing && len(a.store) == 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if len(a.store) != 1 || !a.processing {
+		t.Fatalf("verification did not start: processing=%v rows=%d", a.processing, len(a.store))
+	}
+
+	stop := ui.NewTester(a.view, 1200, 720)
+	if err := stop.Click("Stop"); err != nil {
+		t.Fatalf("Stop button: %v", err)
+	}
+	for a.processing && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if a.processing {
+		t.Fatal("Stop did not end the run")
+	}
+	if a.store[0].Status == model.Error {
+		t.Errorf("a stopped row is an error: %v %q", a.store[0].Status, a.store[0].Err)
+	}
+
+	resume := ui.NewTester(a.view, 1200, 720)
+	if err := resume.Click("Resume"); err != nil {
+		t.Fatalf("Resume button: %v", err)
+	}
+	if !a.processing {
+		t.Fatal("Resume did not start a run")
+	}
+	deadline = time.Now().Add(20 * time.Second)
+	for a.processing && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if a.processing {
+		t.Fatal("recheck did not finish")
+	}
+	if a.store[0].Status != model.Bad || a.store[0].Err != "" || a.store[0].Hash == nil {
+		t.Errorf("rechecked row = %v %q hash=%d", a.store[0].Status, a.store[0].Err, len(a.store[0].Hash))
 	}
 }
 

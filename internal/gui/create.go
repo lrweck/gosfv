@@ -20,7 +20,7 @@ func (a *App) scheduleCreate() {
 		a.createTimer.Stop()
 	}
 	a.createTimer = time.AfterFunc(250*time.Millisecond, func() {
-		mygo.RunOnMain(a.launchCreate)
+		a.onMain(a.launchCreate)
 	})
 }
 
@@ -63,7 +63,7 @@ func (a *App) launchCreate() {
 			mygo.App.Quit()
 			return
 		}
-		mygo.RunOnMain(func() { a.beginCreate(paths, base, path) })
+		a.onMain(func() { a.beginCreate(paths, base, path) })
 	}()
 }
 

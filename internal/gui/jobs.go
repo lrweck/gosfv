@@ -83,14 +83,14 @@ func (a *App) runJobs() {
 			return
 		}
 		id := 0
-		mygo.RunOnMain(func() { id = a.nextQueuedJob() })
+		a.onMain(func() { id = a.nextQueuedJob() })
 		if id == 0 {
-			mygo.RunOnMain(a.jobsIdle)
+			a.onMain(a.jobsIdle)
 			return
 		}
 		a.runOneJob(id)
 		if a.queueStop.Load() {
-			mygo.RunOnMain(a.jobsIdle)
+			a.onMain(a.jobsIdle)
 			return
 		}
 	}
@@ -182,7 +182,7 @@ func (a *App) prepareJob(id int) (jobRun, bool) {
 func (a *App) runOneJob(id int) {
 	var run jobRun
 	ok := false
-	mygo.RunOnMain(func() { run, ok = a.prepareJob(id) })
+	a.onMain(func() { run, ok = a.prepareJob(id) })
 	if !ok {
 		return
 	}
@@ -192,11 +192,11 @@ func (a *App) runOneJob(id int) {
 		Gate:       run.gate,
 		Scan:       run.scan,
 		OnScan: func(found int) {
-			mygo.RunOnMain(func() { a.scanCount = found })
+			a.onMain(func() { a.scanCount = found })
 			a.invalidate()
 		},
 		OnFiles: func(files []model.File) {
-			mygo.RunOnMain(func() {
+			a.onMain(func() {
 				a.installFiles(files)
 				if j := a.findJob(id); j != nil {
 					j.Status = model.JobInProgress
@@ -205,7 +205,7 @@ func (a *App) runOneJob(id int) {
 			a.invalidate()
 		},
 		OnTick: func(p runner.Progress, done []runner.Completed) {
-			mygo.RunOnMain(func() {
+			a.onMain(func() {
 				a.applyTick(p, done)
 				a.updateJobProgress(p)
 			})
@@ -214,7 +214,7 @@ func (a *App) runOneJob(id int) {
 		OnFileProgress: a.onFileProgress,
 	}
 	rep, err := runner.Create(run.ctx, run.inputs, run.root, opt)
-	mygo.RunOnMain(func() { a.finishJob(id, run, rep, err) })
+	a.onMain(func() { a.finishJob(id, run, rep, err) })
 	a.invalidate()
 }
 

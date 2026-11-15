@@ -5,8 +5,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/egoist/mygo"
-
 	"github.com/lrweck/gosfv/internal/hexfmt"
 	"github.com/lrweck/gosfv/internal/model"
 )
@@ -111,7 +109,7 @@ func (a *App) refreshSelection(force bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.selCancel = cancel
 	go computeSelection(ctx, n, files, func(info selectionInfo) {
-		mygo.RunOnMain(func() {
+		a.onMain(func() {
 			if seq != a.selSeq {
 				return
 			}

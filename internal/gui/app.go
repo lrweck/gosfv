@@ -104,6 +104,11 @@ type App struct {
 	gate   *engine.Gate
 	cancel context.CancelFunc
 
+	// runMain runs fn on the UI thread. Production leaves it nil and uses
+	// mygo.RunOnMain; a test runs the callbacks inline so it can drive a
+	// whole recheck without a window loop.
+	runMain func(func())
+
 	stats      runner.Progress
 	elapsed    time.Duration
 	activeView []activeFile
@@ -314,11 +319,25 @@ func (a *App) invalidate() {
 	}
 }
 
+// postToMain posts a callback to the UI thread. Tests replace it to run the
+// callbacks inline without a window loop.
+var postToMain = mygo.RunOnMain
+
+// onMain runs fn on the UI thread. The callbacks of a run are posted there
+// from its goroutine; a test replaces runMain to run them inline.
+func (a *App) onMain(fn func()) {
+	if a.runMain != nil {
+		a.runMain(fn)
+		return
+	}
+	postToMain(fn)
+}
+
 func (a *App) refreshNow() {
 	if a.closing.Load() || a.win == nil || a.win.IsDestroyed() {
 		return
 	}
-	mygo.RunOnMain(func() {
+	a.onMain(func() {
 		a.invalidate()
 	})
 }
@@ -889,19 +908,19 @@ func (a *App) startRun(paths []string, base string, verify bool, checksumPath st
 		Gate:       a.gate,
 		Scan:       a.scanOptions(),
 		OnScan: func(found int) {
-			mygo.RunOnMain(func() { a.scanCount = found })
+			a.onMain(func() { a.scanCount = found })
 			a.invalidate()
 		},
 		OnFiles: func(files []model.File) {
-			mygo.RunOnMain(func() { a.installFiles(files) })
+			a.onMain(func() { a.installFiles(files) })
 			a.invalidate()
 		},
 		OnParsed: func(comments []string) {
-			mygo.RunOnMain(func() { a.comments = comments })
+			a.onMain(func() { a.comments = comments })
 			a.invalidate()
 		},
 		OnTick: func(p runner.Progress, done []runner.Completed) {
-			mygo.RunOnMain(func() { a.applyTick(p, done) })
+			a.onMain(func() { a.applyTick(p, done) })
 			a.invalidate()
 		},
 		OnFileProgress: a.onFileProgress,
@@ -914,7 +933,7 @@ func (a *App) startRun(paths []string, base string, verify bool, checksumPath st
 		} else {
 			rep, err = runner.Create(ctx, paths, base, opt)
 		}
-		mygo.RunOnMain(func() { a.finishRun(rep, err) })
+		a.onMain(func() { a.finishRun(rep, err) })
 		a.invalidate()
 	}()
 }
@@ -967,6 +986,19 @@ func (a *App) failedIndices() []int {
 	return idx
 }
 
+// unfinishedIndices lists the rows a stopped run left without a result:
+// queued for the first time or pending a retry.
+func (a *App) unfinishedIndices() []int {
+	var idx []int
+	for i := range a.store {
+		switch a.store[i].Status {
+		case model.Queued, model.Pending:
+			idx = append(idx, i)
+		}
+	}
+	return idx
+}
+
 func (a *App) recheckFailed() {
 	if !a.verifying || len(a.store) == 0 {
 		a.notice = "Open a checksum file before rechecking."
@@ -976,6 +1008,28 @@ func (a *App) recheckFailed() {
 	idx := a.failedIndices()
 	if len(idx) == 0 {
 		a.notice = "There are no BAD, MISSING or ERROR files to recheck."
+		a.invalidate()
+		return
+	}
+	a.startRecheck(idx)
+}
+
+// resumeRun continues a stopped verification: it rechecks only the rows that
+// have no result yet, leaving the OK and BAD rows as they are.
+func (a *App) resumeRun() {
+	if !a.verifying || len(a.store) == 0 {
+		a.notice = "Open a checksum file before resuming."
+		a.invalidate()
+		return
+	}
+	if a.processing {
+		a.notice = "Busy: wait for the current operation to finish."
+		a.invalidate()
+		return
+	}
+	idx := a.unfinishedIndices()
+	if len(idx) == 0 {
+		a.notice = "Nothing to resume: every row has a result."
 		a.invalidate()
 		return
 	}
@@ -1046,11 +1100,11 @@ func (a *App) startRecheck(indices []int) {
 		Gate:           a.gate,
 		OnFileProgress: a.onFileProgress,
 		OnTick: func(p runner.Progress, done []runner.Completed) {
-			mygo.RunOnMain(func() { a.applyTick(p, done) })
+			a.onMain(func() { a.applyTick(p, done) })
 			a.invalidate()
 		},
 		OnRecheck: func(files []model.File, idx []int) {
-			mygo.RunOnMain(func() {
+			a.onMain(func() {
 				for j, i := range idx {
 					if i >= 0 && i < len(a.store) {
 						a.store[i].Status = files[j].Status
@@ -1064,7 +1118,7 @@ func (a *App) startRecheck(indices []int) {
 	}
 	go func() {
 		rep, err := runner.Recheck(ctx, a.store, valid, opt)
-		mygo.RunOnMain(func() { a.finishRun(rep, err) })
+		a.onMain(func() { a.finishRun(rep, err) })
 		a.invalidate()
 	}()
 }
@@ -1131,6 +1185,11 @@ func (a *App) finishRun(rep *runner.Report, err error) {
 			a.notice = fmt.Sprintf("CRC-32 split across %d workers.", rep.CRCWorkers)
 		} else if rep.Workers > 1 && rep.Progress.Total < rep.Workers && rep.Algo != hasher.CRC32 {
 			a.notice = fmt.Sprintf("%s is a sequential digest; each file uses one worker.", rep.Algo.ShortLabel())
+		}
+	}
+	if a.cancelled && !recheck && rep != nil {
+		if n := len(a.unfinishedIndices()); n > 0 {
+			a.notice = fmt.Sprintf("Stopped: %d file(s) waiting. Use Resume to continue.", n)
 		}
 	}
 	// A verification that finished cleanly gets the system's own alert
