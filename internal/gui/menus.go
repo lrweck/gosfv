@@ -41,7 +41,6 @@ func (a *App) buildMenu() {
 		{Label: "Recheck Selected", Click: click(a.recheckSelected)},
 		{Label: "Recheck Failed (BAD/MISSING/ERROR)", Click: click(a.recheckFailed)},
 		{Label: "Recheck All", Accelerator: "F5", Click: click(a.recheckAll)},
-		{Label: "Resume Stopped Run", Click: click(a.resumeRun)},
 		mygo.Separator(),
 		{Label: "Clear List", Click: click(a.clearList)},
 		mygo.Separator(),

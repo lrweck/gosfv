@@ -448,54 +448,7 @@ func TestRecheckButtonOnACreatedList(t *testing.T) {
 	}
 }
 
-func TestResumeHashesOnlyTheWaitingRows(t *testing.T) {
-	dir := t.TempDir()
-	dataA := []byte("alpha")
-	dataB := []byte("bravo")
-	pathA := filepath.Join(dir, "a.bin")
-	pathB := filepath.Join(dir, "b.bin")
-	if err := os.WriteFile(pathA, dataA, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(pathB, dataB, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	sumA := md5.Sum(dataA)
-	sumB := md5.Sum(dataB)
-	sentinel := bytes.Repeat([]byte{0xaa}, md5.Size)
-
-	a := testApp()
-	a.runMain = func(fn func()) { fn() }
-	a.verifying = true
-	a.cancelled = true
-	a.algo = hasher.MD5
-	a.store = []model.File{
-		{ID: 1, Name: "a.bin", Rel: "a.bin", Dir: dir, Full: pathA, Size: int64(len(dataA)),
-			Expected: sumA[:], Hash: sentinel, Status: model.OK},
-		{ID: 2, Name: "b.bin", Rel: "b.bin", Dir: dir, Full: pathB, Size: int64(len(dataB)),
-			Expected: sumB[:], Status: model.Queued},
-	}
-	a.viewRows = []int{0, 1}
-	a.stats = runner.Progress{Total: 2, Done: 1, OK: 1}
-	a.refreshColumns()
-
-	a.resumeRun()
-	deadline := time.Now().Add(5 * time.Second)
-	for a.processing && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
-	}
-	if a.processing {
-		t.Fatal("resume did not finish")
-	}
-	if !bytes.Equal(a.store[0].Hash, sentinel) {
-		t.Error("the finished row was hashed again")
-	}
-	if a.store[1].Status != model.OK || !bytes.Equal(a.store[1].Hash, sumB[:]) {
-		t.Errorf("resumed row = %v hash=%x", a.store[1].Status, a.store[1].Hash)
-	}
-}
-
-func TestStopThenResumeFromTheButtons(t *testing.T) {
+func TestStopThenRecheckFromTheButtons(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "big.bin")
 	f, err := os.Create(p)
@@ -540,12 +493,12 @@ func TestStopThenResumeFromTheButtons(t *testing.T) {
 		t.Errorf("a stopped row is an error: %v %q", a.store[0].Status, a.store[0].Err)
 	}
 
-	resume := ui.NewTester(a.view, 1200, 720)
-	if err := resume.Click("Resume"); err != nil {
-		t.Fatalf("Resume button: %v", err)
+	recheck := ui.NewTester(a.view, 1200, 720)
+	if err := recheck.Click("Recheck All"); err != nil {
+		t.Fatalf("Recheck All button: %v", err)
 	}
 	if !a.processing {
-		t.Fatal("Resume did not start a run")
+		t.Fatal("Recheck All did not start a run")
 	}
 	deadline = time.Now().Add(20 * time.Second)
 	for a.processing && time.Now().Before(deadline) {

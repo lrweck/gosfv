@@ -179,11 +179,6 @@ func (a *App) statusBar(c *ui.Context) {
 		// The Recheck buttons keep their slots while a run is in progress,
 		// disabled: the Pause and Stop controls live in the footer, so a
 		// second click on Recheck cannot land on one of them.
-		if a.cancelled && !a.modeJobs && len(a.store) > 0 {
-			if ui.Button(c, "Resume").Tooltip("Continue the rows a stopped run left waiting").Disabled(a.processing).Clicked() {
-				a.resumeRun()
-			}
-		}
 		if !a.modeJobs && len(a.store) > 0 {
 			label := "Recheck All"
 			if a.selection.Len() > 0 {

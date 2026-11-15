@@ -1014,28 +1014,6 @@ func (a *App) recheckFailed() {
 	a.startRecheck(idx)
 }
 
-// resumeRun continues a stopped verification: it rechecks only the rows that
-// have no result yet, leaving the OK and BAD rows as they are.
-func (a *App) resumeRun() {
-	if len(a.store) == 0 {
-		a.notice = "Nothing to resume."
-		a.invalidate()
-		return
-	}
-	if a.processing || a.jobRunning {
-		a.notice = "Busy: wait for the current operation to finish."
-		a.invalidate()
-		return
-	}
-	idx := a.unfinishedIndices()
-	if len(idx) == 0 {
-		a.notice = "Nothing to resume: every row has a result."
-		a.invalidate()
-		return
-	}
-	a.startHashes(idx)
-}
-
 // startRecheck rehashes the chosen rows. On a verification it compares them
 // with the expected digests; on a list built by creating hashes it simply
 // recomputes them. Unlike startRun it keeps the list, the checksum path's
@@ -1056,8 +1034,7 @@ func (a *App) startRecheck(indices []int) {
 
 // startHashes rehashes a subset of the list in place. On a verification the
 // rows are compared with their Expected digests; on a creation list Expected
-// is nil, so the run only fills Hash and turns each row OK. Resume uses it to
-// continue a stopped creation.
+// is nil, so the run only fills Hash and turns each row OK.
 func (a *App) startHashes(indices []int) {
 	if a.processing || a.jobRunning {
 		a.notice = "Busy: wait for the current operation to finish."
@@ -1215,7 +1192,7 @@ func (a *App) finishRun(rep *runner.Report, err error) {
 	}
 	if a.cancelled && !recheck && rep != nil {
 		if n := len(a.unfinishedIndices()); n > 0 {
-			a.notice = fmt.Sprintf("Stopped: %d file(s) waiting. Use Resume to continue.", n)
+			a.notice = fmt.Sprintf("Stopped: %d file(s) waiting. Use Recheck All to continue.", n)
 		}
 	}
 	// A verification that finished cleanly gets the system's own alert
