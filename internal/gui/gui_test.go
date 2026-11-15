@@ -173,6 +173,16 @@ func TestSortByProgress(t *testing.T) {
 	}
 }
 
+func TestFailedIndices(t *testing.T) {
+	a := testApp() // a OK, b BAD, c MISSING
+	a.store = append(a.store, model.File{ID: 4, Name: "d.bin", Status: model.Error})
+	a.store = append(a.store, model.File{ID: 5, Name: "e.bin", Status: model.Pending})
+	got := a.failedIndices()
+	if len(got) != 3 || got[0] != 1 || got[1] != 2 || got[2] != 3 {
+		t.Errorf("failed = %v", got)
+	}
+}
+
 func TestVerifySucceeded(t *testing.T) {
 	cases := []struct {
 		name string

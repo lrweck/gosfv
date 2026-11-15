@@ -34,12 +34,16 @@ func (a *App) buildMenu() {
 		return func(*mygo.MenuItem, *mygo.Window) { fn() }
 	}
 
+	recheck := &mygo.MenuItem{Label: "Recheck", Submenu: []*mygo.MenuItem{
+		{Label: "Selected Rows", Click: click(a.recheckSelected)},
+		{Label: "Failed (BAD/MISSING/ERROR)", Click: click(a.recheckFailed)},
+		{Label: "All", Accelerator: "F5", Click: click(a.recheckAll)},
+	}}
 	file := &mygo.MenuItem{Label: "File", Submenu: []*mygo.MenuItem{
 		{Label: "Open...", Accelerator: "CmdOrCtrl+O", Click: click(a.openDialog)},
 		{Label: "Save As...", Accelerator: "CmdOrCtrl+S", Click: click(a.saveAs)},
 		mygo.Separator(),
-		{Label: "Recheck Selected", Click: click(a.recheckSelected)},
-		{Label: "Recheck All", Accelerator: "F5", Click: click(a.recheckAll)},
+		recheck,
 		mygo.Separator(),
 		{Label: "Clear List", Click: click(a.clearList)},
 		mygo.Separator(),

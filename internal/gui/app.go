@@ -937,6 +937,34 @@ func (a *App) recheckAll() {
 	a.startRecheck(idx)
 }
 
+// failedIndices lists the entries worth another attempt: BAD, MISSING or
+// ERROR. A file that is already OK is not rehashed by Recheck Failed.
+func (a *App) failedIndices() []int {
+	var idx []int
+	for i := range a.store {
+		switch a.store[i].Status {
+		case model.Bad, model.Missing, model.Error:
+			idx = append(idx, i)
+		}
+	}
+	return idx
+}
+
+func (a *App) recheckFailed() {
+	if !a.verifying || len(a.store) == 0 {
+		a.notice = "Open a checksum file before rechecking."
+		a.invalidate()
+		return
+	}
+	idx := a.failedIndices()
+	if len(idx) == 0 {
+		a.notice = "There are no BAD, MISSING or ERROR files to recheck."
+		a.invalidate()
+		return
+	}
+	a.startRecheck(idx)
+}
+
 // startRecheck hashes the chosen rows again against the expected digests
 // already in the list. Unlike startRun it keeps the list, the checksum path's
 // comments and the rest of the rows untouched.
