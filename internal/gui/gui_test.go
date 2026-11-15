@@ -120,6 +120,26 @@ func TestViewShowsDetailsSidebar(t *testing.T) {
 	}
 }
 
+func TestSortByProgress(t *testing.T) {
+	a := testApp()
+	a.mu.Lock()
+	a.active[0] = activeFile{Name: "a.bin", Done: 25, Total: 100}
+	a.mu.Unlock()
+
+	a.sort = ui.SortOrder{Column: "Progress"}
+	a.applyView()
+	got := []string{a.store[a.viewRows[0]].Name, a.store[a.viewRows[1]].Name, a.store[a.viewRows[2]].Name}
+	if got[0] != "c.bin" || got[1] != "a.bin" || got[2] != "b.bin" {
+		t.Errorf("ascending = %v", got)
+	}
+	a.sort.Descending = true
+	a.applyView()
+	got = []string{a.store[a.viewRows[0]].Name, a.store[a.viewRows[1]].Name, a.store[a.viewRows[2]].Name}
+	if got[0] != "b.bin" || got[1] != "a.bin" || got[2] != "c.bin" {
+		t.Errorf("descending = %v", got)
+	}
+}
+
 func TestVerifySucceeded(t *testing.T) {
 	cases := []struct {
 		name string

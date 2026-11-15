@@ -396,7 +396,7 @@ func (a *App) refreshColumns() {
 	cols := []ui.TableColumn{
 		{Title: "File Name", ID: "Name", Width: 0, MinWidth: 240, MaxWidth: 520, Sortable: true},
 		{Title: "Size", ID: "Size", Width: 92, MinWidth: 70, Align: ui.End, Sortable: true},
-		{Title: "Progress", ID: "Progress", Width: 80, MinWidth: 64, Align: ui.End},
+		{Title: "Progress", ID: "Progress", Width: 80, MinWidth: 64, Align: ui.End, Sortable: true},
 		{Title: "Status", ID: "Status", Width: 90, MinWidth: 70, Sortable: true},
 	}
 	if a.settings.ShowHashCol {
@@ -460,6 +460,10 @@ func (a *App) sortView(view []int) {
 		return
 	}
 	desc := a.sort.Descending
+	var progress map[int32]activeFile
+	if col == "Progress" {
+		progress = a.progressSnapshot()
+	}
 	slices.SortFunc(view, func(i, j int) int {
 		fi := a.store[i]
 		fj := a.store[j]
@@ -478,6 +482,14 @@ func (a *App) sortView(view []int) {
 			if fi.Size < fj.Size {
 				c = -1
 			} else if fi.Size > fj.Size {
+				c = 1
+			}
+		case "Progress":
+			pi := fileFraction(fi, i, progress)
+			pj := fileFraction(fj, j, progress)
+			if pi < pj {
+				c = -1
+			} else if pi > pj {
 				c = 1
 			}
 		case "Expected":
@@ -502,6 +514,41 @@ func (a *App) sortView(view []int) {
 		}
 		return c
 	})
+}
+
+// progressSnapshot copies the live per-file counters so sorting takes the
+// mutex once instead of once per comparison.
+func (a *App) progressSnapshot() map[int32]activeFile {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.active) == 0 {
+		return nil
+	}
+	m := make(map[int32]activeFile, len(a.active))
+	for k, v := range a.active {
+		m[k] = v
+	}
+	return m
+}
+
+// fileFraction is the value the Progress column sorts on: the live fraction
+// while a file is hashed, 1 when it finished OK/BAD, else 0.
+func fileFraction(f model.File, idx int, active map[int32]activeFile) float64 {
+	if p, ok := active[int32(idx)]; ok && p.Total > 0 {
+		frac := float64(p.Done) / float64(p.Total)
+		if frac < 0 {
+			return 0
+		}
+		if frac > 1 {
+			return 1
+		}
+		return frac
+	}
+	switch f.Status {
+	case model.OK, model.Bad:
+		return 1
+	}
+	return 0
 }
 
 func (a *App) duplicates() [][]int {
