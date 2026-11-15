@@ -234,7 +234,7 @@ go tool mygo build
 - The same overall progress appears on the taskbar (Windows), Dock (macOS) or launcher (Linux).
 - A verification where every file matched beeps with the system sound if the window is in the background.
 - Right-click a row for **Recheck Selected** / **Recheck Failed** / **Recheck All**, or use **File > Recheck** (All is F5), to verify again after fixing files; the rest of the list and its expected hashes stay as they are.
-- While a run is active, **Pause/Resume** and **Stop** sit in the status bar, and **Mode > Pause / Resume Run** and **Stop Run** bind them to F7 and F8.
+- While a run is active, **Pause/Resume** and **Stop** sit in the status bar, and **Mode > Pause / Resume Run** and **Stop Run** bind them to F7 and F8. While paused the elapsed time and ETA freeze and the throughput reads `0.0 MB/s`; resuming continues from where it stopped.
 - Use **Options > System Integration** to add or remove Explorer entries.
 
 ### Command line

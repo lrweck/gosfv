@@ -1400,10 +1400,14 @@ func (a *App) highlight() string {
 }
 
 func (a *App) speedText() string {
-	if a.stats.SpeedBPS <= 0 {
+	if a.stats.SpeedBPS <= 0 && !a.paused {
 		return ""
 	}
-	s := fmt.Sprintf("Speed: %.1f MB/s", a.stats.SpeedBPS/(1024*1024))
+	speed := a.stats.SpeedBPS
+	if a.paused {
+		speed = 0
+	}
+	s := fmt.Sprintf("Speed: %.1f MB/s", speed/(1024*1024))
 	if a.stats.ETA > 0 {
 		d := a.stats.ETA
 		if d < time.Second {

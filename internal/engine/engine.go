@@ -58,9 +58,11 @@ type Progress struct {
 
 // Gate pauses and resumes all workers between reads.
 type Gate struct {
-	mu     sync.Mutex
-	paused bool
-	resume chan struct{}
+	mu          sync.Mutex
+	paused      bool
+	resume      chan struct{}
+	pausedAt    time.Time
+	pausedTotal time.Duration
 }
 
 // NewGate returns a running gate.
@@ -96,21 +98,42 @@ func (g *Gate) Set(paused bool) {
 	if g.paused == paused {
 		return
 	}
-	g.paused = paused
-	if !paused {
-		close(g.resume)
-		g.resume = make(chan struct{})
+	if paused {
+		g.paused = true
+		g.pausedAt = time.Now()
+		return
 	}
+	g.pausedTotal += time.Since(g.pausedAt)
+	g.paused = false
+	close(g.resume)
+	g.resume = make(chan struct{})
+}
+
+// PauseState reports whether the gate is paused and how long it has spent
+// paused in total, including the interval still running.
+func (g *Gate) PauseState() (bool, time.Duration) {
+	if g == nil {
+		return false, 0
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	d := g.pausedTotal
+	if g.paused {
+		d += time.Since(g.pausedAt)
+	}
+	return g.paused, d
 }
 
 // Paused reports the gate's state.
 func (g *Gate) Paused() bool {
-	if g == nil {
-		return false
-	}
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	return g.paused
+	paused, _ := g.PauseState()
+	return paused
+}
+
+// PausedDuration is the time the gate has spent paused.
+func (g *Gate) PausedDuration() time.Duration {
+	_, d := g.PauseState()
+	return d
 }
 
 // Options configures an Engine.
@@ -173,6 +196,8 @@ type Engine struct {
 	total     int64
 	next      atomic.Int64
 	start     time.Time
+	pauseBase time.Duration
+	lastETA   time.Duration
 
 	// usedCRCParallel is set when a CRC-32 run split files into chunks.
 	usedCRCParallel bool
@@ -180,6 +205,8 @@ type Engine struct {
 	// crcStarted holds the UnixNano when each task's first chunk began, so
 	// the result reports the file's wall time rather than the whole run's.
 	crcStarted []atomic.Int64
+	// crcPaused is the gate's paused duration when that first chunk began.
+	crcPaused []atomic.Int64
 }
 
 // New prepares an engine. Tasks must not be mutated until Run returns.
@@ -203,15 +230,17 @@ func New(tasks []Task, opt Options) *Engine {
 			total += tasks[i].Size
 		}
 	}
+	_, pauseBase := opt.Gate.PauseState()
 	return &Engine{
-		tasks:   tasks,
-		opt:     opt,
-		buf:     buf,
-		arena:   opt.HashArena,
-		results: make([]Result, len(tasks)),
-		done:    make([]atomic.Uint32, len(tasks)),
-		total:   total,
-		start:   time.Now(),
+		tasks:     tasks,
+		opt:       opt,
+		buf:       buf,
+		arena:     opt.HashArena,
+		results:   make([]Result, len(tasks)),
+		done:      make([]atomic.Uint32, len(tasks)),
+		total:     total,
+		start:     time.Now(),
+		pauseBase: pauseBase,
 	}
 }
 
@@ -245,13 +274,28 @@ func (e *Engine) Hash(i int) []byte {
 func (e *Engine) Progress() Progress {
 	done := int(e.completed.Load())
 	bytesDone := e.processed.Load()
-	elapsed := time.Since(e.start)
+	paused, pausedTotal := e.opt.Gate.PauseState()
+	pausedFor := pausedTotal - e.pauseBase
+	if pausedFor < 0 {
+		pausedFor = 0
+	}
+	elapsed := time.Since(e.start) - pausedFor
+	if elapsed < 0 {
+		elapsed = 0
+	}
 	p := Progress{
 		Done:       done,
 		Total:      len(e.tasks),
 		BytesDone:  bytesDone,
 		BytesTotal: e.total,
 		Elapsed:    elapsed,
+	}
+	if paused {
+		// The clock is stopped, so there is no throughput; the ETA keeps
+		// the last value it had before the pause instead of drifting.
+		p.SpeedBPS = 0
+		p.ETA = e.lastETA
+		return p
 	}
 	if elapsed > 0 {
 		p.SpeedBPS = float64(bytesDone) / elapsed.Seconds()
@@ -262,6 +306,7 @@ func (e *Engine) Progress() Progress {
 			p.ETA = time.Duration(seconds * float64(time.Second))
 		}
 	}
+	e.lastETA = p.ETA
 	return p
 }
 
@@ -302,8 +347,13 @@ func (e *Engine) worker(ctx context.Context) {
 		}
 		t := &e.tasks[i]
 		start := time.Now()
+		pausedAtStart := e.opt.Gate.PausedDuration()
 		n, err := e.hashOne(ctx, h, t, buf, i)
-		e.results[i] = Result{Err: err, Elapsed: time.Since(start), Bytes: n}
+		elapsed := time.Since(start) - (e.opt.Gate.PausedDuration() - pausedAtStart)
+		if elapsed < 0 {
+			elapsed = 0
+		}
+		e.results[i] = Result{Err: err, Elapsed: elapsed, Bytes: n}
 		e.done[i].Store(1)
 		e.completed.Add(1)
 	}

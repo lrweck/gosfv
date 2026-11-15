@@ -124,6 +124,56 @@ func TestGate(t *testing.T) {
 	}
 }
 
+func TestGatePauseDuration(t *testing.T) {
+	g := NewGate()
+	base := g.PausedDuration()
+	g.Set(true)
+	time.Sleep(25 * time.Millisecond)
+	if d := g.PausedDuration() - base; d < 15*time.Millisecond {
+		t.Errorf("paused for %v, want at least 15ms", d)
+	}
+	g.Set(false)
+	stopped := g.PausedDuration() - base
+	time.Sleep(10 * time.Millisecond)
+	if extra := g.PausedDuration() - base - stopped; extra > 5*time.Millisecond {
+		t.Errorf("pause kept counting after resume: %v", extra)
+	}
+}
+
+func TestProgressPaused(t *testing.T) {
+	g := NewGate()
+	e := New([]Task{{Index: 0, Size: 1000}}, Options{Kind: hasher.MD5, Gate: g})
+	e.start = time.Now().Add(-2 * time.Second)
+	e.processed.Store(500)
+
+	p1 := e.Progress()
+	if p1.SpeedBPS <= 0 || p1.ETA <= 0 {
+		t.Fatalf("before pause: %+v", p1)
+	}
+	g.Set(true)
+	time.Sleep(40 * time.Millisecond)
+	p2 := e.Progress()
+	if p2.SpeedBPS != 0 {
+		t.Errorf("paused speed = %v, want 0", p2.SpeedBPS)
+	}
+	if p2.ETA != p1.ETA {
+		t.Errorf("paused ETA = %v, want the last %v", p2.ETA, p1.ETA)
+	}
+	if p2.Elapsed > p1.Elapsed+10*time.Millisecond {
+		t.Errorf("paused elapsed kept moving: %v -> %v", p1.Elapsed, p2.Elapsed)
+	}
+
+	g.Set(false)
+	time.Sleep(20 * time.Millisecond)
+	p3 := e.Progress()
+	if p3.SpeedBPS <= 0 {
+		t.Errorf("after resume speed = %v", p3.SpeedBPS)
+	}
+	if p3.Elapsed-p1.Elapsed > 70*time.Millisecond {
+		t.Errorf("elapsed includes the pause: %v", p3.Elapsed-p1.Elapsed)
+	}
+}
+
 func BenchmarkHashXXH3(b *testing.B) {
 	dir := b.TempDir()
 	data := make([]byte, 8<<20)

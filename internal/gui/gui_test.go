@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -174,6 +175,21 @@ func TestSortByProgress(t *testing.T) {
 	// The active group stays first; only its order flips.
 	if got[0] != "c.bin" || got[1] != "a.bin" || got[2] != "b.bin" {
 		t.Errorf("descending = %v", got)
+	}
+}
+
+func TestSpeedTextPaused(t *testing.T) {
+	a := &App{
+		processing: true,
+		paused:     true,
+		stats:      runner.Progress{SpeedBPS: 100 << 20, ETA: 5 * time.Second},
+	}
+	got := a.speedText()
+	if !strings.Contains(got, "0.0 MB/s") {
+		t.Errorf("paused speed = %q", got)
+	}
+	if !strings.Contains(got, "ETA: 00:05") {
+		t.Errorf("paused eta = %q", got)
 	}
 }
 
