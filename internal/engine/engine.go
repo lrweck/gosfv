@@ -177,6 +177,9 @@ type Engine struct {
 	// usedCRCParallel is set when a CRC-32 run split files into chunks.
 	usedCRCParallel bool
 	crcWorkers      int
+	// crcStarted holds the UnixNano when each task's first chunk began, so
+	// the result reports the file's wall time rather than the whole run's.
+	crcStarted []atomic.Int64
 }
 
 // New prepares an engine. Tasks must not be mutated until Run returns.

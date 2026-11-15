@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/lrweck/gosfv/internal/hasher"
 )
@@ -108,6 +109,37 @@ func TestCRCDefaultChunkPolicy(t *testing.T) {
 	}
 	if err := e.Result(0).Err; err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestParallelCRCElapsedIsPerFile(t *testing.T) {
+	dir := t.TempDir()
+	data := make([]byte, 16<<20)
+	rand.New(rand.NewSource(12)).Read(data)
+	path := filepath.Join(dir, "big.bin")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e := New([]Task{{Index: 0, Path: path, Size: int64(len(data))}}, Options{
+		Kind: hasher.CRC32, Workers: 4,
+	})
+	// Time spent before Run belongs to the caller, not to this file.
+	time.Sleep(100 * time.Millisecond)
+	e.Run(context.Background())
+	if !e.UsedCRCParallel() {
+		t.Fatal("the file did not take the chunked CRC path")
+	}
+	r := e.Result(0)
+	if r.Err != nil {
+		t.Fatal(r.Err)
+	}
+	if r.Elapsed <= 0 || r.Elapsed >= 80*time.Millisecond {
+		t.Errorf("elapsed = %v; it includes time before Run", r.Elapsed)
+	}
+	want := crc32.ChecksumIEEE(data)
+	got := e.Hash(0)
+	if !bytes.Equal(got, []byte{byte(want >> 24), byte(want >> 16), byte(want >> 8), byte(want)}) {
+		t.Fatalf("hash = %x, want %08x", got, want)
 	}
 }
 

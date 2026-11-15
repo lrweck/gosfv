@@ -98,6 +98,7 @@ func (e *Engine) runCRCParallel(ctx context.Context) bool {
 	parts := make([][]crcPart, n)
 	remaining := make([]atomic.Int32, n)
 	readBytes := make([]atomic.Int64, n)
+	e.crcStarted = make([]atomic.Int64, n)
 	for i, c := range chunks {
 		parts[i] = make([]crcPart, c)
 		remaining[i].Store(int32(c))
@@ -142,6 +143,9 @@ func (e *Engine) runCRCParallel(ctx context.Context) bool {
 				}
 				ch := plans[j]
 				t := &e.tasks[ch.task]
+				// The first chunk of a file starts its per-file clock; the
+				// last one reports how long the file took.
+				e.crcStarted[ch.task].CompareAndSwap(0, time.Now().UnixNano())
 				f, err := os.Open(t.Path)
 				if err != nil {
 					errMu.Lock()
@@ -207,7 +211,11 @@ func (e *Engine) finishCRCChunk(task, part int, value crcPart, parts [][]crcPart
 	errMu.Unlock()
 
 	t := &e.tasks[task]
-	res := Result{Bytes: t.Size, Elapsed: time.Since(e.start)}
+	elapsed := time.Since(e.start)
+	if t0 := e.crcStarted[task].Load(); t0 != 0 {
+		elapsed = time.Since(time.Unix(0, t0))
+	}
+	res := Result{Bytes: t.Size, Elapsed: elapsed}
 	if err == nil {
 		crc := parts[task][0].crc
 		for p := 1; p < len(parts[task]); p++ {
