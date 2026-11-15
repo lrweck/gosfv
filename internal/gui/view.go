@@ -371,14 +371,17 @@ func (a *App) fileCell(c *ui.Context, row, col int) {
 		ui.Text(c, size).SingleLine().FontSize(11).TextColor(textColor)
 	case "Progress":
 		if done, total, ok := a.progressOfFile(idx); ok && total > 0 {
-			pct := int(float64(done) / float64(total) * 100)
+			pct := float64(done) / float64(total) * 100
+			if pct > 100 {
+				pct = 100
+			}
 			color := t.Accent
 			if chosen {
 				color = t.AccentText
 			}
-			ui.Textf(c, "%d%%", pct).SingleLine().FontSize(11).Bold().TextColor(color)
+			ui.Textf(c, "%.1f%%", pct).SingleLine().FontSize(11).Bold().TextColor(color)
 		} else if f.Status == model.OK || f.Status == model.Bad {
-			ui.Text(c, "100%").SingleLine().FontSize(11).TextColor(mutedColor)
+			ui.Text(c, "100.0%").SingleLine().FontSize(11).TextColor(mutedColor)
 		} else {
 			ui.Text(c, "—").SingleLine().TextColor(mutedColor)
 		}
@@ -433,7 +436,7 @@ func (a *App) footer(c *ui.Context) {
 		default:
 			p.TextColor(t.Success)
 		}
-		ui.Textf(c, "%d%%", int(frac*100)).FontSize(11).TextColor(t.TextMuted).Width(36)
+		ui.Textf(c, "%.1f%%", frac*100).FontSize(11).TextColor(t.TextMuted).Width(48)
 		if a.processing && a.settings.ShowThroughput {
 			if speed := a.speedText(); speed != "" {
 				ui.Text(c, speed).FontSize(11).TextColor(t.TextMuted).SingleLine()
@@ -485,7 +488,7 @@ func (a *App) activePanel(c *ui.Context) {
 					pct = float64(f.Done) / float64(f.Total)
 				}
 				ui.Progress(c, pct).Width(150)
-				ui.Textf(c, "%3d%%", int(pct*100)).FontSize(11).Width(48)
+				ui.Textf(c, "%.1f%%", pct*100).FontSize(11).Width(56)
 			})
 		}
 		if len(a.activeView) > limit {

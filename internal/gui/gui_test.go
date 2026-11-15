@@ -214,7 +214,7 @@ func TestViewShowsSizeAndProgress(t *testing.T) {
 	a.active[0] = activeFile{Name: "a.bin", Done: 50, Total: 100}
 	a.mu.Unlock()
 	tt := ui.NewTester(a.view, 1400, 720)
-	for _, text := range []string{"1.5 KiB", "1.0 MiB", "50%", "100%"} {
+	for _, text := range []string{"1.5 KiB", "1.0 MiB", "50.0%", "100.0%"} {
 		if !tt.HasText(text) {
 			t.Errorf("table does not show %q; texts: %v", text, tt.Texts())
 		}
