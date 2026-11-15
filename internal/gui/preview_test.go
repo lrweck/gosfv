@@ -16,6 +16,8 @@ import (
 func filesApp() *App {
 	a := testApp()
 	a.verifying = true
+	a.store[0].Size = 18 << 30
+	a.store[1].Size = 48 << 20
 	a.refreshColumns()
 	// Show the details sidebar populated without starting a background job:
 	// the tester does not run goroutines, and the stat fields would arrive
@@ -62,7 +64,10 @@ func TestRenderPreview(t *testing.T) {
 	running := func() *App {
 		a := filesApp()
 		a.processing = true
-		a.stats = runner.Progress{Total: 10, Done: 4, OK: 3, Bad: 1, SpeedBPS: 800 << 20, ETA: 30 * time.Second}
+		a.stats = runner.Progress{Total: 3, Done: 1, OK: 1, SpeedBPS: 800 << 20, ETA: 30 * time.Second}
+		a.mu.Lock()
+		a.active[0] = activeFile{Name: "a.bin", Done: 9 << 30, Total: 18 << 30}
+		a.mu.Unlock()
 		return a
 	}
 	cases := []struct {

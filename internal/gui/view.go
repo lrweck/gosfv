@@ -334,7 +334,8 @@ func (a *App) fileCell(c *ui.Context, row, col int) {
 	if row < 0 || row >= len(a.viewRows) || col < 0 || col >= len(a.cols) {
 		return
 	}
-	f := &a.store[a.viewRows[row]]
+	idx := a.viewRows[row]
+	f := &a.store[idx]
 	t := c.Theme()
 	chosen := a.selection.Has(f.ID)
 	textColor := t.Text
@@ -356,6 +357,28 @@ func (a *App) fileCell(c *ui.Context, row, col int) {
 			color = t.AccentText
 		}
 		ui.Text(c, text).SingleLine().TextColor(color).Tooltip(f.FullPath())
+	case "Size":
+		size := "—"
+		switch {
+		case f.Size > 0:
+			size = formatBytes(f.Size)
+		case f.Status == model.OK || f.Status == model.Bad:
+			size = "0 B"
+		}
+		ui.Text(c, size).SingleLine().FontSize(11).TextColor(textColor)
+	case "Progress":
+		if done, total, ok := a.progressOfFile(idx); ok && total > 0 {
+			pct := int(float64(done) / float64(total) * 100)
+			color := t.Accent
+			if chosen {
+				color = t.AccentText
+			}
+			ui.Textf(c, "%d%%", pct).SingleLine().FontSize(11).Bold().TextColor(color)
+		} else if f.Status == model.OK || f.Status == model.Bad {
+			ui.Text(c, "100%").SingleLine().FontSize(11).TextColor(mutedColor)
+		} else {
+			ui.Text(c, "—").SingleLine().TextColor(mutedColor)
+		}
 	case "Hash":
 		if f.Hash != nil {
 			h := hexfmt.Upper(f.Hash)

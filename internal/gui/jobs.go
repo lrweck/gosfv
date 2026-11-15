@@ -108,6 +108,7 @@ func (a *App) jobsIdle() {
 	a.updateProblemMenus()
 	a.syncAlgoMenu()
 	a.syncViewMenu()
+	a.updateNativeProgress()
 	a.invalidate()
 }
 
@@ -173,6 +174,7 @@ func (a *App) prepareJob(id int) (jobRun, bool) {
 	a.updateProblemMenus()
 	a.syncAlgoMenu()
 	a.syncViewMenu()
+	a.updateNativeProgress()
 	a.invalidate()
 	return run, true
 }
@@ -224,6 +226,7 @@ func (a *App) finishJob(id int, run jobRun, rep *runner.Report, err error) {
 	a.cancel = nil
 	a.currentJob = 0
 	a.clearActive()
+	a.updateNativeProgress()
 	if j == nil {
 		a.updateTitle()
 		a.invalidate()

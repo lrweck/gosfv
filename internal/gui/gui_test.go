@@ -120,6 +120,49 @@ func TestViewShowsDetailsSidebar(t *testing.T) {
 	}
 }
 
+func TestVerifySucceeded(t *testing.T) {
+	cases := []struct {
+		name string
+		p    runner.Progress
+		want bool
+	}{
+		{"all ok", runner.Progress{Total: 3, Done: 3, OK: 3}, true},
+		{"bad", runner.Progress{Total: 3, Done: 3, OK: 2, Bad: 1}, false},
+		{"missing", runner.Progress{Total: 3, Done: 3, OK: 2, Missing: 1}, false},
+		{"error", runner.Progress{Total: 3, Done: 3, OK: 2, Error: 1}, false},
+		{"unfinished", runner.Progress{Total: 3, Done: 2, OK: 2}, false},
+		{"empty", runner.Progress{}, false},
+	}
+	for _, tc := range cases {
+		if got := verifySucceeded(&runner.Report{Progress: tc.p}); got != tc.want {
+			t.Errorf("%s: got %v, want %v", tc.name, got, tc.want)
+		}
+	}
+	if verifySucceeded(nil) {
+		t.Error("nil report counted as success")
+	}
+}
+
+func TestViewShowsSizeAndProgress(t *testing.T) {
+	a := testApp()
+	a.store[0].Size = 1536
+	a.store[1].Size = 1 << 20
+	a.mu.Lock()
+	a.active[0] = activeFile{Name: "a.bin", Done: 50, Total: 100}
+	a.mu.Unlock()
+	tt := ui.NewTester(a.view, 1400, 720)
+	for _, text := range []string{"1.5 KiB", "1.0 MiB", "50%", "100%"} {
+		if !tt.HasText(text) {
+			t.Errorf("table does not show %q; texts: %v", text, tt.Texts())
+		}
+	}
+}
+
+func TestUpdateNativeProgressWithoutWindow(t *testing.T) {
+	a := &App{}
+	a.updateNativeProgress() // must not panic without a window
+}
+
 func TestSelectionLoadingDelay(t *testing.T) {
 	a := &App{
 		sel:   selectionInfo{Loading: true, Count: 1, HasSingle: true},

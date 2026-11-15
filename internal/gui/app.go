@@ -394,14 +394,16 @@ func (a *App) resetJobList() {
 
 func (a *App) refreshColumns() {
 	cols := []ui.TableColumn{
-		{Title: "File Name", ID: "Name", Width: 0, MinWidth: 260, MaxWidth: 520, Sortable: true},
+		{Title: "File Name", ID: "Name", Width: 0, MinWidth: 240, MaxWidth: 520, Sortable: true},
+		{Title: "Size", ID: "Size", Width: 92, MinWidth: 70, Align: ui.End, Sortable: true},
+		{Title: "Progress", ID: "Progress", Width: 80, MinWidth: 64, Align: ui.End},
+		{Title: "Status", ID: "Status", Width: 90, MinWidth: 70, Sortable: true},
 	}
 	if a.settings.ShowHashCol {
-		cols = append(cols, ui.TableColumn{Title: "Hash", ID: "Hash", Width: 430, MinWidth: 120, Sortable: true})
+		cols = append(cols, ui.TableColumn{Title: "Hash", ID: "Hash", Width: 340, MinWidth: 120, Sortable: true})
 	}
-	cols = append(cols, ui.TableColumn{Title: "Status", ID: "Status", Width: 90, MinWidth: 70, Sortable: true})
 	if a.verifying && a.settings.ShowExpectedCol {
-		cols = append(cols, ui.TableColumn{Title: "Expected Hash", ID: "Expected", Width: 430, MinWidth: 120, Sortable: true})
+		cols = append(cols, ui.TableColumn{Title: "Expected Hash", ID: "Expected", Width: 340, MinWidth: 120, Sortable: true})
 	}
 	if a.settings.ShowTime {
 		cols = append(cols, ui.TableColumn{Title: "Time", ID: "Time", Width: 90, MinWidth: 60, Sortable: true})
@@ -472,6 +474,12 @@ func (a *App) sortView(view []int) {
 			c = compareBytes(fi.Hash, fj.Hash)
 		case "Status":
 			c = int(fi.Status) - int(fj.Status)
+		case "Size":
+			if fi.Size < fj.Size {
+				c = -1
+			} else if fi.Size > fj.Size {
+				c = 1
+			}
 		case "Expected":
 			c = compareBytes(fi.Expected, fj.Expected)
 		case "Time":
@@ -633,6 +641,7 @@ func (a *App) installFiles(files []model.File) {
 }
 
 func (a *App) applyTick(p runner.Progress, done []runner.Completed) {
+	a.mu.Lock()
 	for _, d := range done {
 		if d.Index < 0 || d.Index >= len(a.store) {
 			continue
@@ -647,6 +656,7 @@ func (a *App) applyTick(p runner.Progress, done []runner.Completed) {
 		f.Elapsed = d.Elapsed
 		delete(a.active, int32(d.Index))
 	}
+	a.mu.Unlock()
 	a.stats = p
 	a.elapsed = p.Elapsed
 	a.syncActive()
@@ -654,6 +664,36 @@ func (a *App) applyTick(p runner.Progress, done []runner.Completed) {
 		a.updateJobProgress(p)
 	}
 	a.updateProblemMenus()
+	a.updateNativeProgress()
+}
+
+// progressOfFile is the current done and total for a row being hashed.
+// Workers update the map, so it is read under the same mutex.
+func (a *App) progressOfFile(idx int) (done, total int64, ok bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	p, ok := a.active[int32(idx)]
+	return p.Done, p.Total, ok
+}
+
+// updateNativeProgress mirrors the overall run on the Windows taskbar,
+// the macOS Dock or the Linux launcher. The window may not exist in tests.
+func (a *App) updateNativeProgress() {
+	if a.win == nil || a.closing.Load() || a.win.IsDestroyed() {
+		return
+	}
+	if !a.processing && !a.jobRunning {
+		a.win.SetProgressBar(mygo.ProgressBar{})
+		return
+	}
+	p := mygo.ProgressBar{Value: a.currentFraction(), State: mygo.ProgressNormal}
+	switch {
+	case a.scanning || (a.processing && a.stats.Total == 0):
+		p = mygo.ProgressBar{State: mygo.ProgressIndeterminate}
+	case a.paused:
+		p.State = mygo.ProgressPaused
+	}
+	a.win.SetProgressBar(p)
 }
 
 func (a *App) clearActive() {
@@ -729,6 +769,7 @@ func (a *App) startRun(paths []string, base string, verify bool, checksumPath st
 	a.syncViewMenu()
 	a.updateTitle()
 	a.updateProblemMenus()
+	a.updateNativeProgress()
 	a.invalidate()
 
 	seqPath := base
@@ -792,6 +833,7 @@ func (a *App) finishRun(rep *runner.Report, err error) {
 		a.selDirty = true
 		a.updateTitle()
 		a.updateProblemMenus()
+		a.updateNativeProgress()
 		a.invalidate()
 		return
 	}
@@ -814,6 +856,12 @@ func (a *App) finishRun(rep *runner.Report, err error) {
 			a.notice = fmt.Sprintf("%s is a sequential digest; each file uses one worker.", rep.Algo.ShortLabel())
 		}
 	}
+	// A verification that finished cleanly gets the system's own alert
+	// sound when its window is not in front, the way a download manager
+	// does. It is the OS sound, so there is no asset to ship.
+	if a.verifying && verifySucceeded(rep) && a.win != nil && !a.win.IsDestroyed() && !a.win.IsFocused() {
+		mygo.Shell.Beep()
+	}
 	a.selDirty = true
 	a.updateTitle()
 	a.updateProblemMenus()
@@ -829,7 +877,19 @@ func (a *App) finishRun(rep *runner.Report, err error) {
 			a.saveAuto()
 		}
 	}
+	a.updateNativeProgress()
 	a.invalidate()
+}
+
+// verifySucceeded reports a verification where every entry was present and
+// matched. An empty list, a cancellation or a single BAD/MISSING/ERROR is
+// not a success.
+func verifySucceeded(rep *runner.Report) bool {
+	if rep == nil {
+		return false
+	}
+	p := rep.Progress
+	return p.Total > 0 && p.Done >= p.Total && p.Bad == 0 && p.Missing == 0 && p.Error == 0
 }
 
 func (a *App) saveAuto() {
@@ -950,6 +1010,7 @@ func (a *App) togglePause() {
 	if a.modeJobs {
 		a.setCurrentJobPaused(a.paused)
 	}
+	a.updateNativeProgress()
 	a.invalidate()
 }
 
@@ -974,6 +1035,7 @@ func (a *App) stopRun() {
 	if a.cancel != nil {
 		a.cancel()
 	}
+	a.updateNativeProgress()
 	a.invalidate()
 }
 
