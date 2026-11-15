@@ -680,11 +680,15 @@ func (a *App) showDiskInfo() {
 }
 
 func (a *App) showCredits() {
+	title := "GoSFV"
+	if a.version != "" {
+		title += " " + a.version
+	}
 	_, _ = mygo.Dialog.Message(mygo.MessageOptions{
 		Parent:  a.win,
 		Type:    mygo.MessageInfo,
 		Title:   "About GoSFV",
-		Message: "GoSFV 1.0.0",
+		Message: title,
 		Detail: "A fast checksum creator and verifier with a native Go interface.\n\n" +
 			"Project: https://github.com/lrweck/gosfv\n" +
 			"Native UI by MyGo 0.9.0: https://github.com/egoist/mygo\n\n" +

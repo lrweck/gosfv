@@ -42,7 +42,9 @@ tool agrees on.
 
 ## Performance
 
-GoSFV is designed for throughput on the disk where the files live, and the hot paths use SIMD and SWAR in every layer.
+GoSFV is designed for throughput on the disk where the files live. Hash paths
+use the assembly/SIMD implementations of the Go runtime and xxh3; the checksum
+text codec uses a portable SWAR/table path, with an optional SIMD build.
 
 ### Hashing
 
@@ -128,18 +130,23 @@ two chunks for a 20 MiB file and full parallelism from roughly 160 MiB up.
 
 The end-to-end engine is I/O bound, so a real run is bounded by the disk, not the hash. On a cached 8 MiB file the xxHash3 path measures about 1.7 GB/s through `os.File`, including open, read and result handling, with 15 allocations for the entire run. The pure hasher reaches 49.7 GB/s; the read path is the limit.
 
-### Go 1.27 SIMD
+### Optional: Go 1.27 SIMD hex codec
 
-Go 1.27 added the experimental `simd` and `simd/archsimd` packages. GoSFV uses them for the hexadecimal codec that parsing and saving checksums spend time in:
+Go 1.27 added the experimental `simd` and `simd/archsimd` packages. They can
+accelerate the hexadecimal codec that parses and writes checksum text:
 
 ```powershell
+powershell -ExecutionPolicy Bypass -File build.ps1 -Simd
+# or:
 $env:GOEXPERIMENT = "simd"
 go build -o GoSFV.exe .
-# or:
-powershell -ExecutionPolicy Bypass -File build.ps1
 ```
 
-With `GOEXPERIMENT=simd` and AVX2, `simd/archsimd` converts 16 input bytes to 32 hex characters per iteration, and decodes 16 characters to 8 bytes per iteration. Eight-character SFV CRC-32 hashes go through a SWAR path that extracts and validates all eight nibbles in one `uint64`, then packs four bytes. Without the experiment, a table-driven codec handles the blocks; the SWAR path is always available. The hash algorithms use SIMD assembly either way.
+Release binaries and `go install` use the portable table/SWAR codec. The SIMD
+build is opt-in because the end-to-end difference is within noise for normal
+runs; it only matters when parsing or writing very large checksum lists. The
+hash algorithms use their assembly/SIMD implementations either way; the
+experiment only touches the hexadecimal conversion.
 
 ### Scheduling: one file per core, and one file on all cores when the algorithm allows it
 
@@ -182,6 +189,8 @@ Requirements: Go 1.27.3 or newer. The `go` command downloads the toolchain `go.m
 
 ```powershell
 go build -o GoSFV.exe .
+# or, with the same flags the release script uses:
+powershell -ExecutionPolicy Bypass -File build.ps1
 ```
 
 ### Go install
@@ -195,27 +204,17 @@ go install github.com/lrweck/gosfv@latest
 
 The binary is installed as `gosfv` (`gosfv.exe` on Windows) in
 `$(go env GOPATH)/bin`, usually `%USERPROFILE%\go\bin` on Windows. `go install`
-builds without `GOEXPERIMENT=simd`; the portable hex codec is used and the hash
-algorithms keep their assembly/SIMD implementations. On Linux the GUI still
-loads the system GTK 3 libraries at runtime; `-headless` needs neither a
-display nor those libraries.
-
-With the experimental SIMD codec:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File build.ps1
-```
+builds the same portable codec as the release binaries; the hash algorithms
+keep their assembly/SIMD implementations. On Linux the GUI still loads the
+system GTK 3 libraries at runtime; `-headless` needs neither a display nor
+those libraries.
 
 Packaged app with MyGo (the CLI is pinned as a tool in `go.mod`):
 
 ```powershell
-$env:GOEXPERIMENT = "simd"
 go tool mygo build
-# build/windows-amd64/GoSFV.exe and gosfv-setup-1.0.0-amd64.exe
+# build/windows-amd64/GoSFV.exe and gosfv-setup-1.0.1-amd64.exe
 ```
-
-Without `GOEXPERIMENT=simd`, the packaged app uses the portable hex codec; the
-hash algorithms still use their assembly/SIMD implementations.
 
 ## Usage
 
@@ -347,6 +346,7 @@ The GUI and the CLI share the runner, so status rules, CRC endianness and progre
 
 ```powershell
 go test ./...
+# optional: also exercise the experimental SIMD hex codec
 $env:GOEXPERIMENT = "simd"; go test ./...
 ```
 

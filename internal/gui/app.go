@@ -42,6 +42,7 @@ type Config struct {
 	AlgoSet      bool
 	Theme        settings.ThemeMode
 	ThemeSet     bool
+	Version      string
 }
 
 // App is the whole window state.
@@ -50,6 +51,7 @@ type App struct {
 	settings     settings.Settings
 	settingsPath string
 	settingsSave bool
+	version      string
 
 	themeFrom *ui.Theme
 	themeTo   *ui.Theme
@@ -178,6 +180,7 @@ func Run(cfg Config) error {
 	a := &App{
 		settings:     st,
 		settingsPath: path,
+		version:      cfg.Version,
 		algo:         st.DefaultAlgo,
 		active:       map[int32]activeFile{},
 		statusFilter: 0,

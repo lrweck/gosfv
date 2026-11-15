@@ -14,7 +14,7 @@ import (
 	"github.com/lrweck/gosfv/internal/settings"
 )
 
-const version = "1.0.0"
+const version = "1.0.1"
 
 func main() {
 	flags, err := cli.Parse(os.Args[1:])
@@ -66,6 +66,7 @@ func main() {
 		AlgoSet:      flags.AlgoSet,
 		Theme:        st.Theme,
 		ThemeSet:     flags.ThemeSet,
+		Version:      version,
 	}); err != nil {
 		fmt.Fprintln(os.Stderr, "GoSFV:", err)
 		os.Exit(1)

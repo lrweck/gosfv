@@ -1,11 +1,11 @@
 param(
-    [switch]$Portable
+    [switch]$Simd
 )
 $ErrorActionPreference = "Stop"
-if ($Portable) {
-    $env:GOEXPERIMENT = ""
-} else {
+if ($Simd) {
     $env:GOEXPERIMENT = "simd"
+} else {
+    $env:GOEXPERIMENT = ""
 }
 go build -trimpath -ldflags "-s -w" -o GoSFV.exe .
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
